@@ -97,6 +97,13 @@ class Store:
             )
         self._conn.commit()
 
+    def set_title(self, key: str, title: str) -> None:
+        self._conn.execute(
+            "UPDATE tasks SET title = ?, updated_at = ? WHERE key = ?",
+            (title, _now(), key),
+        )
+        self._conn.commit()
+
     def get(self, key: str) -> DownloadTask | None:
         cursor = self._conn.execute("SELECT * FROM tasks WHERE key = ?", (key,))
         row = cursor.fetchone()

@@ -363,9 +363,34 @@ def _build_work(kind: str, params: dict):
                         save_path=params.get("save_path") or None,
                         dry_run=bool(params.get("dry_run")),
                         sniffed_url=params.get("url") or None,
+                        title=params.get("title") or None,
                         on_event=emit,
                     )
                 ]
+            finally:
+                service.close()
+
+        return work
+
+    if kind == "set_title":
+
+        def work(emit, cancel):
+            title = str(params.get("title") or "")
+            emit({"type": "log", "message": f"设置标题: {title}"})
+            service = DownloadService(_load_config())
+            try:
+                task = service.store.get(str(params.get("key") or "")) if params.get("key") else None
+                if task is None and params.get("torrent_id"):
+                    task = next(
+                        (item for item in service.store.list() if item.torrent_id == params["torrent_id"]),
+                        None,
+                    )
+                if task is None:
+                    raise AmineError("未找到任务")
+                service.store.set_title(task.key, title)
+                task.title = title
+                renamed = service.rename_task(task)
+                return {"renamed": renamed, "title": title}
             finally:
                 service.close()
 

@@ -49,6 +49,30 @@ def test_missing_config_uses_defaults(tmp_path):
     assert config.kazumi_subscriptions == []
 
 
+def test_title_aliases_and_overrides(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        """
+[titles]
+"葬送的芙莉莲 第二季" = "葬送的芙莉莲"
+
+[[rss]]
+name = "Frieren"
+url = "https://example.com/rss"
+title = "葬送的芙莉莲"
+
+[[kazumi.subscribe]]
+name = "芙莉莲"
+title = "葬送的芙莉莲"
+""",
+        encoding="utf-8",
+    )
+    config = AppConfig.load(path)
+    assert config.title_aliases == {"葬送的芙莉莲 第二季": "葬送的芙莉莲"}
+    assert config.rss[0].title == "葬送的芙莉莲"
+    assert config.kazumi_subscriptions[0].title == "葬送的芙莉莲"
+
+
 def test_load_kazumi_subscriptions(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text(

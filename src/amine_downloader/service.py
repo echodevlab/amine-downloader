@@ -50,6 +50,16 @@ class DownloadService:
     def name_for(self, parsed: ParsedTitle, *, ext: str = "", episode: str | None = None) -> str:
         return render(parsed, self.config.rename_template, episode=episode, ext=ext)
 
+    def resolve_title(self, parsed: ParsedTitle, override: str | None = None) -> ParsedTitle:
+        """Apply an explicit title override, else the configured alias map."""
+
+        title = (override or "").strip()
+        if not title:
+            title = str(self.config.title_aliases.get(parsed.title, "")).strip()
+        if title and title != parsed.title:
+            return replace(parsed, title=title)
+        return parsed
+
     # -- adding -----------------------------------------------------------
     def add_torrent(
         self,
@@ -62,10 +72,12 @@ class DownloadService:
         rename: bool = True,
         key: str | None = None,
         paused: bool = False,
+        title_override: str | None = None,
     ) -> DownloadTask:
         raw_title = raw_title or source
         parsed = parsed or parse_title(raw_title)
         parsed = self.apply_offset(parsed)
+        parsed = self.resolve_title(parsed, title_override)
         new_name = self.name_for(parsed) if rename else ""
         save_path = save_path if save_path is not None else (self.config.save_path or None)
         category = category if category is not None else (self.config.category or None)
@@ -261,6 +273,7 @@ class DownloadService:
                         parsed=episode.parsed,
                         rename=rename,
                         key=episode.dedup_key,
+                        title_override=feed.title or None,
                     )
                 except Exception as exc:  # noqa: BLE001
                     results.append(RunItem(episode=episode, skipped=f"error: {exc}"))

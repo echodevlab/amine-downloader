@@ -59,6 +59,12 @@ local_dir = ""
 # name = "Mikan - Sousou no Frieren"
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
+# title = "葬送的芙莉莲"   # 覆盖解析出的番剧名（可选，用于 Jellyfin 匹配等）
+
+# 标题别名：把解析出的标题映射为固定名称（可选）
+# [titles]
+# "葬送的芙莉莲 第二季" = "葬送的芙莉莲"
+# "Bocchi the Rock!" = "孤独摇滚"
 
 [kazumi]
 # Kazumi 规则目录，留空使用 <配置目录>/kazumi-rules
@@ -94,6 +100,7 @@ concurrency = 8
 # quality = "1080p"
 # save_path = ""
 # enabled = true
+# title = ""                 # 覆盖解析出的番剧名（可选）
 '''
 
 
@@ -139,6 +146,7 @@ class RssFeed:
     name: str
     url: str
     enabled: bool = True
+    title: str = ""
 
 
 @dataclass(slots=True)
@@ -150,6 +158,7 @@ class KazumiSubscription:
     quality: str = ""
     save_path: str = ""
     enabled: bool = True
+    title: str = ""
 
 
 @dataclass(slots=True)
@@ -163,6 +172,7 @@ class AppConfig:
     resolution_preference: list[str] = field(default_factory=list)
     rss: list[RssFeed] = field(default_factory=list)
     kazumi_subscriptions: list[KazumiSubscription] = field(default_factory=list)
+    title_aliases: dict[str, str] = field(default_factory=dict)
     qbittorrent: dict = field(default_factory=dict)
     aria2: dict = field(default_factory=dict)
     kazumi: dict = field(default_factory=dict)
@@ -192,6 +202,7 @@ class AppConfig:
                     name=str(entry.get("name") or entry["url"]),
                     url=str(entry["url"]),
                     enabled=bool(entry.get("enabled", True)),
+                    title=str(entry.get("title", "")),
                 )
             )
         config.qbittorrent = dict(data.get("qbittorrent", {}))
@@ -209,8 +220,12 @@ class AppConfig:
                     quality=str(entry.get("quality", "")),
                     save_path=str(entry.get("save_path", "")),
                     enabled=bool(entry.get("enabled", True)),
+                    title=str(entry.get("title", "")),
                 )
             )
+        aliases = data.get("titles") or {}
+        if isinstance(aliases, dict):
+            config.title_aliases = {str(key): str(value) for key, value in aliases.items()}
         return config
 
 

@@ -43,6 +43,7 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
   const [road, setRoad] = useState(0)
   const [episode, setEpisode] = useState("")
   const [quality, setQuality] = useState("")
+  const [titleOverride, setTitleOverride] = useState("")
   const [subs, setSubs] = useState<KazumiSubscription[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -122,6 +123,7 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
         road,
         episode: episode || undefined,
         quality: quality || undefined,
+        title: titleOverride || undefined,
         dry_run: dryRun,
       })
       toast.success("任务已创建，可在「任务」中查看进度")
@@ -284,6 +286,15 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
                   value={quality}
                   onChange={(event) => setQuality(event.target.value)}
                   placeholder="1080p"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">标题（可选覆盖）</Label>
+                <Input
+                  className="w-48"
+                  value={titleOverride}
+                  onChange={(event) => setTitleOverride(event.target.value)}
+                  placeholder="用于 Jellyfin 匹配"
                 />
               </div>
               <Button size="sm" variant="outline" disabled={busy} onClick={() => download(true)}>

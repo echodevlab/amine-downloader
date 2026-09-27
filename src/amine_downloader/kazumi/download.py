@@ -6,7 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from ..config import AppConfig, KazumiSubscription, default_data_path, kazumi_rules_dir
@@ -168,6 +168,7 @@ class KazumiService:
         save_path: str | None = None,
         dry_run: bool = False,
         sniffed_url: str | None = None,
+        title: str | None = None,
         on_event=None,
     ) -> list[KazumiResult]:
         def emit(event: dict) -> None:
@@ -209,6 +210,7 @@ class KazumiService:
                 save_path=save_path,
                 dry_run=dry_run,
                 sniffed_url=sniffed_url,
+                title_override=title,
             )
             results.append(result)
             emit({"type": "item", "item": asdict(result)})
@@ -282,6 +284,7 @@ class KazumiService:
                     dry_run=dry_run,
                     sniffed_url=None,
                     key=key,
+                    title_override=subscription.title or None,
                 )
             )
         return results
@@ -297,10 +300,16 @@ class KazumiService:
         dry_run: bool,
         sniffed_url: str | None,
         key: str | None = None,
+        title_override: str | None = None,
     ) -> KazumiResult:
         number = self._episode_number(episode, index)
-        title = self._clean_title(hit.item.name)
+        override = (title_override or "").strip()
+        title = override or self._clean_title(hit.item.name)
         base = parse_title(title)
+        if not override:
+            alias = str(self.config.title_aliases.get(base.title, "")).strip()
+            if alias:
+                base = replace(base, title=alias)
         parsed = ParsedTitle(
             raw=title,
             group=base.group,

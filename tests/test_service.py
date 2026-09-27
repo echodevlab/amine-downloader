@@ -125,6 +125,22 @@ def test_aria2_renames_after_complete(tmp_path):
     ]
 
 
+def test_resolve_title_alias_and_override(tmp_path):
+    service, _, _ = build_service(tmp_path, [])
+    service.config.title_aliases = {"旧名": "新名"}
+    parsed = parse_title("旧名 - 01 [1080p]")
+    assert service.resolve_title(parsed).title == "新名"
+    assert service.resolve_title(parsed, "手动名").title == "手动名"
+
+    task = service.add_torrent(
+        "magnet:?xt=urn:btih:xyz",
+        raw_title="旧名 - 01 [1080p]",
+        rename=False,
+        title_override="手动名",
+    )
+    assert task.title == "手动名"
+
+
 def test_build_rename_fn(tmp_path):
     service, _, _ = build_service(tmp_path, [])
     parsed = parse_title("[Group] Sintel the Movie - 01 [1080p]")

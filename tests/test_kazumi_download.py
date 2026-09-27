@@ -131,6 +131,27 @@ def test_hls_native_uses_single_task(tmp_path):
     assert fake.calls == [("https://cdn.test/index.m3u8", "葬送的芙莉莲 S01E01")]
 
 
+def test_title_override_changes_filename(tmp_path):
+    fake = FakeNativeAria2()
+    service = build_service(tmp_path, fake)
+    hit = make_hit()
+    from amine_downloader.kazumi.client import Episode
+
+    result = service._download_episode(
+        hit,
+        Episode(name="第1集", page_url="https://site.test/play/1"),
+        0,
+        quality="",
+        save_path=str(tmp_path),
+        dry_run=False,
+        sniffed_url="https://cdn.test/movie.mp4",
+        title_override="自定义番剧名",
+    )
+    assert result.title == "自定义番剧名"
+    assert result.output == "自定义番剧名 S01E01.mp4"
+    assert fake.calls == [("https://cdn.test/movie.mp4", "自定义番剧名 S01E01.mp4")]
+
+
 def test_dry_run_does_not_touch_aria2(tmp_path):
     fake = FakeAria2()
     service = build_service(tmp_path, fake)

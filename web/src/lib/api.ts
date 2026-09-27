@@ -170,6 +170,7 @@ export const api = {
     quality?: string
     dry_run?: boolean
     url?: string
+    title?: string
   }) =>
     request<KazumiResult[]>("/api/kazumi/download", {
       method: "POST",

@@ -164,6 +164,41 @@ rename_template = "[{group}] {title} - {episode}"
 amine-downloader parse "[Lilith-Raws] 葬送的芙莉莲 - 05 [1080p][Baha][WEB-DL][CHT]"
 ```
 
+### 标题自定义
+
+解析出的番剧名可能不统一（同一部番不同季/不同字幕组的叫法不同）。可以手动指定标题：
+
+```toml
+# 全局别名：把解析出的标题映射为固定名称
+[titles]
+"葬送的芙莉莲 第二季" = "葬送的芙莉莲"
+"Bocchi the Rock!" = "孤独摇滚"
+
+# 每条订阅可单独覆盖
+[[rss]]
+name = "Mikan - 葬送的芙莉莲"
+url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
+title = "葬送的芙莉莲"
+
+[[kazumi.subscribe]]
+name = "芙莉莲"
+rule = "AGE"
+title = "葬送的芙莉莲"
+```
+
+命令行：
+
+```bash
+# 添加时覆盖标题
+amine-downloader download "<magnet>" --title "[Group] 旧名 - 05 [1080p]" --as-title "葬送的芙莉莲"
+amine-downloader kazumi download "芙莉莲" --rule AGE --title "葬送的芙莉莲"
+
+# 修改已有任务的标题并重命名
+amine-downloader title "<key 或 --id gid>" --title "葬送的芙莉莲 (2023)"
+```
+
+Web UI：解析下载页有「标题（可选覆盖）」输入框；历史记录页每行有「改标题」按钮。
+
 ## 命令参考
 
 | 命令 | 说明 |
@@ -177,6 +212,7 @@ amine-downloader parse "[Lilith-Raws] 葬送的芙莉莲 - 05 [1080p][Baha][WEB-
 | `list [--json]` | 列出下载器中的任务 |
 | `status` | 测试下载器连接 |
 | `rename [--id ID] [--limit N]` | 对任务执行重命名 |
+| `title [KEY] --title T [--id ID]` | 修改任务的番剧标题并重命名 |
 | `remove ID [--delete-files]` | 移除任务 |
 | `kazumi rules [--json]` | 列出已导入的 Kazumi 规则 |
 | `kazumi import SOURCE...` | 导入规则（本地文件或 URL） |
@@ -478,6 +514,23 @@ src/amine_downloader/
 uv sync
 uv run pytest
 ```
+
+## Jellyfin 兼容性
+
+**当前状态：文件名兼容，目录结构还不完整。**
+
+- ✅ 文件名形如 `... S01E05 ...`，Jellyfin 能识别季/集；配合 `episode_offset` 可校正字幕组集数偏差。
+- ✅ 可用 `[titles]` / `title` 把番剧名统一成 Jellyfin 能匹配的名称。
+- ⚠️ **没有按剧集的规范文件夹**：BT 种子保留原始文件夹名（如 `[Lilith-Raws] 葬送的芙莉莲 - 05 [1080p]`），
+  直链 / HLS 则直接落在下载目录里，Jellyfin 取系列名会出错。
+- ⚠️ **没有自动入库**：下载目录不是媒体库目录，也没有 `Season 01/` 结构或 `.nfo`。
+
+建议：
+
+1. 用 `[titles]` / `title` 统一番剧名；
+2. Jellyfin 媒体库指向**专门的媒体目录**，而不是下载目录；
+3. 需要完整自动入库（`剧名 (年份)/Season 01/剧名 S01E01.mkv`、可选 `.nfo`）时，需要一个
+   「整理入库」步骤——目前**尚未实现**。
 
 ## 已知限制
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { RefreshCw, Wand2 } from "lucide-react"
+import { Pencil, RefreshCw, Wand2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ function statusVariant(status: string) {
   return "outline"
 }
 
-export default function HistoryPage() {
+export default function HistoryPage({ onNavigate }: { onNavigate: (key: "jobs") => void }) {
   const [tasks, setTasks] = useState<DownloadTask[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -56,6 +56,18 @@ export default function HistoryPage() {
     }
   }
 
+  async function setTitle(task: DownloadTask) {
+    const next = window.prompt("新的番剧标题", task.title || task.raw_title)
+    if (!next || !next.trim()) return
+    try {
+      await api.createJob("set_title", { key: task.key, title: next.trim() })
+      toast.success("任务已创建，可在「任务」中查看进度")
+      onNavigate("jobs")
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -80,12 +92,13 @@ export default function HistoryPage() {
               <TableHead>状态</TableHead>
               <TableHead>下载器</TableHead>
               <TableHead>时间</TableHead>
+              <TableHead className="w-24">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {tasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={7} className="text-muted-foreground">
                   暂无记录
                 </TableCell>
               </TableRow>
@@ -106,6 +119,11 @@ export default function HistoryPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{task.client}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{task.created_at}</TableCell>
+                  <TableCell>
+                    <Button size="xs" variant="outline" onClick={() => setTitle(task)}>
+                      <Pencil /> 改标题
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}

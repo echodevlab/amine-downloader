@@ -92,7 +92,7 @@ export default function App() {
         </aside>
         <main className="min-w-0 flex-1">
           {page === "downloads" && <Dashboard />}
-          {page === "history" && <HistoryPage />}
+          {page === "history" && <HistoryPage onNavigate={goToJobs} />}
           {page === "rss" && <RssPage onNavigate={goToJobs} />}
           {page === "kazumi" && <KazumiPage onNavigate={goToJobs} />}
           {page === "jobs" && <JobsPage />}

@@ -131,6 +131,7 @@ def cmd_download(args) -> int:
             save_path=args.save_path,
             rename=not args.no_rename,
             paused=args.paused,
+            title_override=args.as_title,
         )
     except AmineError as exc:
         print(f"错误: {exc}", file=sys.stderr)
@@ -285,6 +286,28 @@ def cmd_remove(args) -> int:
     return 0
 
 
+def cmd_title(args) -> int:
+    service = _load_service(args)
+    try:
+        task = service.store.get(args.key) if args.key else None
+        if task is None and args.id:
+            task = next((item for item in service.store.list() if item.torrent_id == args.id), None)
+        if task is None:
+            print("未找到任务（可用 `list` 或历史记录查看 key / id）", file=sys.stderr)
+            return 1
+        service.store.set_title(task.key, args.title)
+        task.title = args.title
+        renamed = service.rename_task(task)
+    except AmineError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        service.close()
+    suffix = "（已重命名）" if renamed else "（重命名将在任务完成后进行）"
+    print(f"已设置标题: {args.title} {suffix}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     from .server import serve
 
@@ -424,6 +447,7 @@ def cmd_kazumi_download(args) -> int:
             save_path=args.save_path,
             dry_run=args.dry_run,
             sniffed_url=args.url,
+            title=args.title,
         )
     except AmineError as exc:
         print(f"错误: {exc}", file=sys.stderr)
@@ -489,6 +513,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_download = sub.add_parser("download", help="下载单个磁力/种子")
     p_download.add_argument("source", help="magnet / .torrent URL / 本地 .torrent 文件")
     p_download.add_argument("--title", help="原始标题（用于解析与重命名）")
+    p_download.add_argument("--as-title", help="覆盖解析出的番剧名")
     p_download.add_argument("--save-path", help="保存路径")
     p_download.add_argument("--no-rename", action="store_true", help="不重命名")
     p_download.add_argument("--paused", action="store_true", help="添加后暂停")
@@ -513,6 +538,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_rename.add_argument("--id", help="仅处理指定 torrent id / gid")
     p_rename.add_argument("--limit", type=int, help="最多处理 N 个任务")
     p_rename.set_defaults(func=cmd_rename)
+
+    p_title = sub.add_parser("title", help="修改任务的番剧标题并重命名")
+    p_title.add_argument("key", nargs="?", help="任务 key")
+    p_title.add_argument("--id", help="按 torrent id / gid 查找")
+    p_title.add_argument("--title", required=True, help="新的番剧标题")
+    p_title.set_defaults(func=cmd_title)
 
     p_remove = sub.add_parser("remove", help="移除任务")
     p_remove.add_argument("id", help="torrent id / gid")
@@ -556,6 +587,7 @@ def build_parser() -> argparse.ArgumentParser:
     k_download.add_argument("--episode", help="仅下载指定集数")
     k_download.add_argument("--limit", type=int, help="最多下载 N 集")
     k_download.add_argument("--quality", help="优先清晰度，如 1080p")
+    k_download.add_argument("--title", help="覆盖解析出的番剧名")
     k_download.add_argument("--save-path", help="保存路径")
     k_download.add_argument("--url", help="已知视频流地址，跳过浏览器嗅探")
     k_download.add_argument("--dry-run", action="store_true", help="只解析，不下载")
