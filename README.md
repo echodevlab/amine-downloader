@@ -273,8 +273,8 @@ aria2c --enable-rpc --rpc-listen-port=6800 --rpc-secret=your_token
   把 aria2 侧路径映射到本机路径（映射盘或 UNC），例如：
   ```toml
   [aria2]
-  download_dir = "/wenwen/downloads"          # aria2 容器内路径
-  local_dir    = "Z:/wenwen/downloads"        # 本机映射盘（或 \\192.168.11.50\wenwen\downloads）
+  download_dir = "/wenwen/media/acg"          # aria2 容器内路径
+  local_dir    = "Z:/wenwen/media/acg"        # 本机映射盘（或 \\192.168.11.50\wenwen\media\acg）
   ```
 
 > `index-out` 的索引是 **1-based**（与 aria2 `--show-files` 一致），本程序已自动换算。
@@ -579,14 +579,14 @@ uv run pytest
 
 ```
 {root}/{剧集}/{季}/{标准文件名}.ext
-# 例：/wenwen/media/anime/葬送的芙莉莲/Season 01/葬送的芙莉莲 S01E01 [1080p].mkv
+# 例：/wenwen/media/acg/葬送的芙莉莲/Season 01/葬送的芙莉莲 S01E01 [1080p].mkv
 ```
 
 ```toml
 [library]
 enabled = true
-root = "/wenwen/media/anime"          # 媒体库根目录（下载器侧路径）
-local_root = "Z:/wenwen/media/anime"  # 同一目录在本机看到的路径（可选，用于磁力磁盘重命名）
+root = "/wenwen/media/acg"          # 媒体库根目录（下载器侧路径）
+local_root = "Z:/wenwen/media/acg"  # 同一目录在本机看到的路径（可选，用于磁力磁盘重命名）
 series_template = "{title}"           # 剧集文件夹名
 season_template = "Season {season}"   # 季文件夹名
 ```

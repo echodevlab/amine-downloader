@@ -23,15 +23,15 @@ episode_offset = 0
 [aria2]
 rpc_url = "http://aria2-next:6800/jsonrpc"
 secret = "CHANGE_ME_RPC_SECRET" # 与 docker-compose.yml 里的 --rpc-secret 保持一致
-download_dir = "/wenwen/downloads"
+download_dir = "/wenwen/media/acg"
 # 与 download_dir 相同（amine 与 aria2 挂了同一个 /wenwen），无需再做映射
-local_dir = "/wenwen/downloads"
+local_dir = "/wenwen/media/acg"
 
 # 下载直接入库：文件直接落到媒体库结构，Jellyfin 可直接识别
 [library]
 enabled = true
-root = "/wenwen/media/anime"
-local_root = "/wenwen/media/anime"
+root = "/wenwen/media/acg"
+local_root = "/wenwen/media/acg"
 series_template = "{title}"
 season_template = "Season {season}"
 

@@ -29,7 +29,7 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./jellyfin/config:/config
-      - /mnt/nas/wenwen/media:/media:ro # 整个 media 进来，建库时再细分
+      - /mnt/nas/wenwen/media:/media:ro # 整个 media 进来；建库时指向 /media/acg
     devices:
       - /dev/dri:/dev/dri # Intel/AMD 核显硬解；没有核显就删掉这两行
     restart: unless-stopped
@@ -54,7 +54,7 @@ services:
       - "--conf-path=/config/aria2.conf"
       - "--rpc-secret=CHANGE_ME_RPC_SECRET" # ← 改成你的密钥，并同步到 amine 配置
       - "--rpc-allow-origin-all=true" # AriaNg 跨源访问需要
-      - "--dir=/wenwen/downloads"
+      - "--dir=/wenwen/media/acg"
       - "--state-dir=/var/lib/aria2-next"
       - "--listen-port=6881"
       - "--dht-listen-port=6881"

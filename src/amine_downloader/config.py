@@ -107,8 +107,8 @@ concurrency = 8
 # 媒体库：下载直接入库（Jellyfin 可直接识别）
 # [library]
 # enabled = true
-# root = "/wenwen/media/anime"          # 媒体库根目录（下载器侧路径）
-# local_root = "Z:/wenwen/media/anime"  # 同一目录在本机看到的路径（可选，用于磁盘重命名）
+# root = "/wenwen/media/acg"          # 媒体库根目录（下载器侧路径）
+# local_root = "Z:/wenwen/media/acg"  # 同一目录在本机看到的路径（可选，用于磁盘重命名）
 # series_template = "{{title}}"           # 剧集文件夹名
 # season_template = "Season {{season}}"   # 季文件夹名
 '''
