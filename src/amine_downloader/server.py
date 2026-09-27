@@ -24,7 +24,7 @@ from .errors import AmineError
 from .jobs import manager
 from .kazumi import KazumiService, RuleStore
 from .parser import parse_title
-from .renamer import render
+from .renamer import DEFAULT_TEMPLATE, render
 from .service import DownloadService
 
 _CONFIG_PATH: str | None = None
@@ -495,6 +495,41 @@ async def job_events(request):
 _SECRET_KEYS = {"secret", "api_key", "password"}
 _CONFIG_SECTIONS = ("app", "aria2", "qbittorrent", "library", "kazumi")
 
+#: 表单留空时使用的默认值（也是设置页里 placeholder 的建议值）。
+CONFIG_DEFAULTS: dict[str, dict] = {
+    "app": {
+        "downloader": "aria2",
+        "rename": True,
+        "rename_template": DEFAULT_TEMPLATE,
+        "save_path": "",
+        "category": "amine",
+        "episode_offset": 0,
+    },
+    "aria2": {
+        "rpc_url": "http://aria2-next:6800/jsonrpc",
+        "download_dir": "/wenwen/media/acg",
+        "local_dir": "/wenwen/media/acg",
+    },
+    "qbittorrent": {
+        "url": "http://qbittorrent:8085",
+        "username": "admin",
+    },
+    "library": {
+        "enabled": True,
+        "root": "/wenwen/media/acg",
+        "local_root": "/wenwen/media/acg",
+        "series_template": "{title}",
+        "season_template": "Season {season}",
+    },
+    "kazumi": {
+        "rename_template": "{title} S{season}E{episode}",
+        "preferred_quality": "1080p",
+        "media_mode": "auto",
+        "auto_install_browser": True,
+        "headless": True,
+    },
+}
+
 
 def _config_file() -> Path:
     return Path(_CONFIG_PATH) if _CONFIG_PATH else default_config_path()
@@ -517,11 +552,18 @@ def _merge_raw(raw: dict, body: dict) -> dict:
         if not isinstance(incoming, dict):
             continue
         target = dict(merged.get(section) or {})
+        defaults = CONFIG_DEFAULTS.get(section, {})
         for key, value in incoming.items():
-            if value is None:
+            if key in _SECRET_KEYS:
+                if value in ("", "******"):
+                    continue  # 留空 = 保持原值
+                target[key] = value
                 continue
-            if key in _SECRET_KEYS and value in ("", "******"):
-                continue  # 留空表示保持原值
+            if value is None or value == "":
+                # 留空 = 用默认值；没有默认值就保持原值
+                if key in defaults:
+                    target[key] = defaults[key]
+                continue
             target[key] = value
         merged[section] = target
     return merged
@@ -529,26 +571,29 @@ def _merge_raw(raw: dict, body: dict) -> dict:
 
 async def get_config(request) -> JSONResponse:
     config = _load_config()
-    aria2 = dict(config.aria2 or {})
-    aria2["secret_set"] = bool(aria2.pop("secret", ""))
-    qb = dict(config.qbittorrent or {})
-    qb["api_key_set"] = bool(qb.pop("api_key", ""))
-    qb["password_set"] = bool(qb.pop("password", ""))
+    raw = _read_raw()
+
+    def section(name: str) -> dict:
+        data = dict(CONFIG_DEFAULTS.get(name, {}))
+        data.update(raw.get(name) or {})
+        return data
+
+    aria2 = section("aria2")
+    aria2["secret_set"] = bool((raw.get("aria2") or {}).get("secret"))
+    aria2.pop("secret", None)
+    qb = section("qbittorrent")
+    qb["api_key_set"] = bool((raw.get("qbittorrent") or {}).get("api_key"))
+    qb["password_set"] = bool((raw.get("qbittorrent") or {}).get("password"))
+    qb.pop("api_key", None)
+    qb.pop("password", None)
     return JSONResponse(
         {
             "config_path": str(config.path) if config.path else "",
-            "app": {
-                "downloader": config.downloader,
-                "rename": config.rename,
-                "rename_template": config.rename_template,
-                "save_path": config.save_path,
-                "category": config.category,
-                "episode_offset": config.episode_offset,
-            },
+            "app": section("app"),
             "aria2": aria2,
             "qbittorrent": qb,
-            "library": dict(config.library or {}),
-            "kazumi": dict(config.kazumi or {}),
+            "library": section("library"),
+            "kazumi": section("kazumi"),
         }
     )
 

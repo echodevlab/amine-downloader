@@ -184,6 +184,38 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>重命名与其它</CardTitle>
+          <CardDescription>表单已预填默认值；留空保存时会用提示里的默认值</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <Field
+            label="重命名模板"
+            value={form.app.rename_template}
+            onChange={(value) => patch("app", "rename_template", value)}
+            placeholder="[{group}] {title} S{season}E{episode} [{resolution}]"
+          />
+          <Field
+            label="分类 / 标签"
+            value={form.app.category}
+            onChange={(value) => patch("app", "category", value)}
+            placeholder="amine"
+          />
+          <Field
+            label="保存路径（可选）"
+            value={form.app.save_path}
+            onChange={(value) => patch("app", "save_path", value)}
+          />
+          <Field
+            label="集数偏移"
+            value={form.app.episode_offset}
+            onChange={(value) => patch("app", "episode_offset", value === "" ? 0 : Number(value))}
+            placeholder="0"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>aria2</CardTitle>
           <CardDescription>JSON-RPC</CardDescription>
         </CardHeader>
@@ -305,6 +337,12 @@ export default function SettingsPage() {
             onChange={(value) => patch("kazumi", "preferred_quality", value)}
             placeholder="1080p"
           />
+          <Field
+            label="解析重命名模板"
+            value={form.kazumi.rename_template}
+            onChange={(value) => patch("kazumi", "rename_template", value)}
+            placeholder="{title} S{season}E{episode}"
+          />
           <div className="flex flex-col gap-1">
             <Label className="text-xs">HLS 方式</Label>
             <select
@@ -327,6 +365,13 @@ export default function SettingsPage() {
               label="首次嗅探自动下载 CloakBrowser"
               checked={form.kazumi.auto_install_browser}
               onChange={(value) => patch("kazumi", "auto_install_browser", value)}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Check
+              label="无头浏览器（headless）"
+              checked={form.kazumi.headless}
+              onChange={(value) => patch("kazumi", "headless", value)}
             />
           </div>
         </CardContent>
