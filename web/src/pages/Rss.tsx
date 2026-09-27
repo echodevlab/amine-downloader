@@ -92,13 +92,14 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
             <TableRow>
               <TableHead>名称</TableHead>
               <TableHead>RSS 地址</TableHead>
+              <TableHead>字幕组</TableHead>
               <TableHead>状态</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {feeds.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} className="text-muted-foreground">
+                <TableCell colSpan={4} className="text-muted-foreground">
                   未配置订阅源
                 </TableCell>
               </TableRow>
@@ -108,6 +109,13 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
                   <TableCell>{feed.name}</TableCell>
                   <TableCell className="max-w-96 truncate text-muted-foreground" title={feed.url}>
                     {feed.url}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {feed.groups?.length
+                      ? feed.groups.join(" / ")
+                      : feed.exclude_groups?.length
+                        ? `排除 ${feed.exclude_groups.join(" / ")}`
+                        : "全部"}
                   </TableCell>
                   <TableCell>
                     <Badge variant={feed.enabled ? "default" : "outline"}>

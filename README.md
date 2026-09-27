@@ -119,7 +119,27 @@ local_dir = ""
 name = "Mikan - 葬送的芙莉莲"
 url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 enabled = true
+# 只下这些字幕组（可选，大小写不敏感的子串匹配）
+# groups = ["Lilith-Raws", "ANi"]
+# 排除这些字幕组（可选）
+# exclude_groups = ["某字幕组"]
 ```
+
+### 限定字幕组
+
+蜜柑的 RSS 是**按番剧**给的（包含该番剧的所有字幕组），所以按**解析出的字幕组**过滤：
+
+```toml
+[[rss]]
+name = "Mikan - 葬送的芙莉莲"
+url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
+groups = ["Lilith-Raws", "ANi"]   # 白名单：只下这些
+# exclude_groups = ["某字幕组"]      # 黑名单：排除这些
+```
+
+- 匹配是**大小写不敏感的子串**：`groups = ["Lilith"]` 也能匹配 `Lilith-Raws`。
+- 同时设置时：先看白名单，再看黑名单。
+- 用 `amine-downloader rss "<订阅源名称或URL>"` 可以先看看有哪些字幕组；`run --dry-run` 也能确认过滤效果。
 
 ### 获取订阅源地址
 

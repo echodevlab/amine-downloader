@@ -1,6 +1,6 @@
-from amine_downloader.config import AppConfig
+from amine_downloader.config import AppConfig, RssFeed
 from amine_downloader.downloaders.base import BaseDownloader
-from amine_downloader.models import DownloadTask, TorrentFile, TorrentInfo
+from amine_downloader.models import DownloadTask, RssEpisode, TorrentFile, TorrentInfo
 from amine_downloader.parser import parse_title
 from amine_downloader.service import DownloadService
 from amine_downloader.store import Store
@@ -167,6 +167,41 @@ def test_add_torrent_library_save_path_and_flatten(tmp_path):
     assert client.rename_plan([(0, "Torrent/Sintel.mp4", 1)]) == {
         0: "[Group] Sintel the Movie S01E01 [1080p].mp4"
     }
+
+
+def _fake_episodes():
+    return [
+        RssEpisode(
+            title="[Lilith-Raws] Anime - 01 [1080p]",
+            torrent_url="http://tracker/1.torrent",
+            parsed=parse_title("[Lilith-Raws] Anime - 01 [1080p]"),
+        ),
+        RssEpisode(
+            title="[ANi] Anime - 02 [1080p]",
+            torrent_url="http://tracker/2.torrent",
+            parsed=parse_title("[ANi] Anime - 02 [1080p]"),
+        ),
+    ]
+
+
+def test_run_allowlists_groups(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path, [])
+    service.config.rss = [RssFeed(name="F", url="http://feed", groups=["Lilith"])]
+    results = service.run()
+    assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
+
+
+def test_run_excludes_groups(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path / "b", [])
+    service.config.rss = [RssFeed(name="F", url="http://feed", exclude_groups=["ANi"])]
+    results = service.run()
+    assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
 
 
 def test_build_rename_plan(tmp_path):

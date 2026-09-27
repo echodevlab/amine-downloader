@@ -310,6 +310,19 @@ class DownloadService:
             return True
         return episode.parsed.resolution in preference
 
+    @staticmethod
+    def _group_allowed(group: str, wanted: list[str]) -> bool:
+        lowered = (group or "").lower()
+        return any(item.lower() in lowered for item in wanted if item)
+
+    def _match_group(self, episode: RssEpisode, feed) -> bool:
+        group = (episode.parsed.group if episode.parsed else "") or ""
+        if feed.groups and not self._group_allowed(group, feed.groups):
+            return False
+        if feed.exclude_groups and self._group_allowed(group, feed.exclude_groups):
+            return False
+        return True
+
     def run(
         self,
         *,
@@ -334,6 +347,8 @@ class DownloadService:
                 if self.store.has(episode.dedup_key):
                     continue
                 if not self._match_resolution(episode):
+                    continue
+                if not self._match_group(episode, feed):
                     continue
                 selected.append(episode)
             if limit:

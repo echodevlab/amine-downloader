@@ -60,6 +60,8 @@ local_dir = ""
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
 # title = "葬送的芙莉莲"   # 覆盖解析出的番剧名（可选，用于 Jellyfin 匹配等）
+# groups = ["Lilith-Raws", "ANi"]   # 只下这些字幕组（可选，子串匹配）
+# exclude_groups = ["某字幕组"]      # 排除这些字幕组（可选）
 
 # 标题别名：把解析出的标题映射为固定名称（可选）
 # [titles]
@@ -157,6 +159,10 @@ class RssFeed:
     url: str
     enabled: bool = True
     title: str = ""
+    #: 只保留这些字幕组（留空 = 全部）；大小写不敏感的子串匹配
+    groups: list[str] = field(default_factory=list)
+    #: 排除这些字幕组
+    exclude_groups: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -214,6 +220,8 @@ class AppConfig:
                     url=str(entry["url"]),
                     enabled=bool(entry.get("enabled", True)),
                     title=str(entry.get("title", "")),
+                    groups=[str(item) for item in entry.get("groups", []) or []],
+                    exclude_groups=[str(item) for item in entry.get("exclude_groups", []) or []],
                 )
             )
         config.qbittorrent = dict(data.get("qbittorrent", {}))

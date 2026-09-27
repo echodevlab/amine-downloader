@@ -26,7 +26,13 @@ export type DownloadTask = {
   updated_at: string
 }
 
-export type RssFeed = { name: string; url: string; enabled: boolean }
+export type RssFeed = {
+  name: string
+  url: string
+  enabled: boolean
+  groups?: string[]
+  exclude_groups?: string[]
+}
 export type RssRunItem = {
   title: string
   group: string
