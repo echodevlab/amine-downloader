@@ -260,6 +260,8 @@ class KazumiService:
         emit({"type": "log", "message": f"共 {len(episodes)} 集待处理"})
 
         quality = quality or self.preferred_quality
+        total = len(episodes)
+        emit({"type": "progress", "done": 0, "total": total, "message": "解析下载"})
         results: list[KazumiResult] = []
         for index, ep in enumerate(episodes):
             result = self._download_episode(
@@ -274,6 +276,7 @@ class KazumiService:
             )
             results.append(result)
             emit({"type": "item", "item": asdict(result)})
+            emit({"type": "progress", "done": index + 1, "total": total, "message": "解析下载"})
         return results
 
     # -- subscriptions ----------------------------------------------------
@@ -299,7 +302,10 @@ class KazumiService:
                 on_event(event)
 
         results: list[KazumiResult] = []
-        for subscription in self.subscriptions(names):
+        subscriptions = self.subscriptions(names)
+        total = len(subscriptions)
+        emit({"type": "progress", "done": 0, "total": total, "message": "追番"})
+        for index, subscription in enumerate(subscriptions):
             emit({"type": "log", "message": f"订阅: {subscription.name}"})
             try:
                 items = self._run_subscription(subscription, dry_run=dry_run, limit=limit)
@@ -308,6 +314,7 @@ class KazumiService:
             for item in items:
                 results.append(item)
                 emit({"type": "item", "item": asdict(item)})
+            emit({"type": "progress", "done": index + 1, "total": total, "message": subscription.name})
         return results
 
     def _run_subscription(

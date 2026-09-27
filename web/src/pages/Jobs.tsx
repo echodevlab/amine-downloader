@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { api, type Job, type JobEvent } from "@/lib/api"
 
 const KIND_LABEL: Record<string, string> = {
@@ -82,6 +83,8 @@ export default function JobsPage() {
   }, [events])
 
   const current = jobs.find((job) => job.id === selected)
+  const progress = [...events].reverse().find((event) => event.type === "progress")
+  const logEvents = events.filter((event) => event.type !== "progress")
 
   async function cancel() {
     if (!selected) return
@@ -150,23 +153,36 @@ export default function JobsPage() {
                 {current.error && <div className="mt-1 text-destructive">{current.error}</div>}
               </div>
             )}
+            {progress && (
+              <div className="mb-2 flex items-center gap-2">
+                <Progress
+                  value={progress.total ? ((progress.done ?? 0) / progress.total) * 100 : 0}
+                  className="w-56"
+                />
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {progress.done ?? 0}/{progress.total ?? "?"}
+                  {progress.message ? ` · ${progress.message}` : ""}
+                </span>
+              </div>
+            )}
             <div
               ref={logRef}
               className="h-80 overflow-y-auto rounded-lg border bg-muted/30 p-3 font-mono text-xs leading-relaxed"
             >
-              {events.length === 0 ? (
+              {logEvents.length === 0 ? (
                 <div className="text-muted-foreground">等待事件…</div>
               ) : (
-                events.map((event, index) => (
-                  <div key={index}>
-                    {event.type === "log" && <span>{event.message}</span>}
-                    {event.type === "item" && <span>· {formatItem(event.item)}</span>}
-                    {event.type === "end" && (
-                      <span className={event.status === "error" ? "text-destructive" : ""}>
-                        任务结束：{event.status}
-                        {event.error ? ` - ${event.error}` : ""}
-                      </span>
-                    )}
+                logEvents.map((event, index) => (
+                  <div key={index} className="flex gap-2">
+                    <span className="shrink-0 text-muted-foreground">
+                      {new Date(event.t * 1000).toLocaleTimeString()}
+                    </span>
+                    <span className={event.status === "error" || event.error ? "text-destructive" : ""}>
+                      {event.type === "log" && event.message}
+                      {event.type === "item" && `· ${formatItem(event.item)}`}
+                      {event.type === "end" &&
+                        `任务结束：${event.status}${event.error ? ` - ${event.error}` : ""}`}
+                    </span>
                   </div>
                 ))
               )}

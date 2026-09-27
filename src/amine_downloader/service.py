@@ -353,10 +353,13 @@ class DownloadService:
                 selected.append(episode)
             if limit:
                 selected = selected[:limit]
-            for episode in selected:
+            total = len(selected)
+            emit({"type": "progress", "done": 0, "total": total, "message": feed.name})
+            for index, episode in enumerate(selected, start=1):
                 if dry_run:
                     results.append(RunItem(episode=episode, skipped="dry-run"))
                     emit({"type": "item", "item": {"title": episode.title, "skipped": "dry-run"}})
+                    emit({"type": "progress", "done": index, "total": total, "message": feed.name})
                     continue
                 try:
                     task = self.add_torrent(
@@ -370,6 +373,7 @@ class DownloadService:
                 except Exception as exc:  # noqa: BLE001
                     results.append(RunItem(episode=episode, skipped=f"error: {exc}"))
                     emit({"type": "item", "item": {"title": episode.title, "skipped": str(exc)}})
+                    emit({"type": "progress", "done": index, "total": total, "message": feed.name})
                     continue
                 results.append(RunItem(episode=episode, task=task))
                 emit(
@@ -383,6 +387,7 @@ class DownloadService:
                         },
                     }
                 )
+                emit({"type": "progress", "done": index, "total": total, "message": feed.name})
         return results
 
     def close(self) -> None:

@@ -204,6 +204,19 @@ def test_run_excludes_groups(tmp_path, monkeypatch):
     assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
 
 
+def test_run_emits_progress_events(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path / "p", [])
+    service.config.rss = [RssFeed(name="F", url="http://feed")]
+    events: list[dict] = []
+    service.run(on_event=events.append)
+    progress = [event for event in events if event["type"] == "progress"]
+    assert progress[0] == {"type": "progress", "done": 0, "total": 2, "message": "F"}
+    assert progress[-1]["done"] == 2 and progress[-1]["total"] == 2
+
+
 def test_build_rename_plan(tmp_path):
     service, _, _ = build_service(tmp_path, [])
     parsed = parse_title("[Group] Sintel the Movie - 01 [1080p]")

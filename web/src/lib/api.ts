@@ -114,6 +114,8 @@ export type JobEvent = {
   status?: string
   error?: string
   result?: unknown
+  done?: number
+  total?: number
 }
 
 export type ParseResult = {
