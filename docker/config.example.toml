@@ -12,12 +12,13 @@ category = "amine"
 # 字幕组集数与番剧集数不一致时的偏移
 episode_offset = 0
 
-[qbittorrent]
-url = "http://qbittorrent:8085"
-# qBittorrent >= 5.2 推荐用 API Key（设置后优先于用户名/密码）
-api_key = ""
-username = "admin"
-password = "adminadmin"
+# 只用 aria2 时无需 [qbittorrent]。
+# 若改用 qBittorrent：把 [app].downloader 改成 "qbittorrent"，并取消下面注释。
+# [qbittorrent]
+# url = "http://qbittorrent:8085"
+# api_key = ""                       # qBittorrent >= 5.2 推荐
+# username = "admin"
+# password = "adminadmin"
 
 [aria2]
 rpc_url = "http://aria2-next:6800/jsonrpc"

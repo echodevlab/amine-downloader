@@ -1,14 +1,14 @@
-# amine-downloader 全家桶
+# amine-downloader 全家桶（aria2 版）
 #
 #   jellyfin        媒体服务器
-#   qbittorrent     BT 下载（服务端重命名）
-#   aria2-next      HTTP / HLS / 磁力（Kazumi 解析下载用）
+#   aria2-next      HTTP / HLS / 磁力 / BT（Kazumi 解析下载 + BT 下载）
 #   ariang          aria2 的 Web 前端
 #   amine-downloader  本项目：订阅 / 解析 / 重命名 / 直接入库 + Web UI
 #
 # 用法：
-#   mkdir -p amine/config
-#   cp docker/config.example.toml amine/config/config.toml   # 然后改里面的地址/密钥
+#   mkdir -p amine/config aria2/config
+#   cp docker/config.example.toml amine/config/config.toml   # 然后改地址/密钥
+#   cp docker/aria2.example.conf aria2/config/aria2.conf      # 可选：aria2 完整配置
 #   docker compose up -d
 #   # Web UI:  http://<host>:8420
 #   # AriaNg:  http://<host>:6880
@@ -18,6 +18,7 @@
 #   - PUID/PGID = 宿主机用户的 uid/gid（下载文件属主）。
 #   - /mnt/nas/wenwen 是 QNAP 共享，所有容器挂到同一路径 /wenwen，
 #     这样 amine-downloader 能直接看到 aria2 写下的文件（磁力磁盘重命名需要）。
+#   - 只用 aria2 一个下载器；若想换成 qBittorrent，见 README「Docker」一节。
 
 services:
   jellyfin:
@@ -33,23 +34,6 @@ services:
       - /dev/dri:/dev/dri # Intel/AMD 核显硬解；没有核显就删掉这两行
     restart: unless-stopped
 
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
-    environment:
-      - TZ=Asia/Shanghai
-      - PUID=1000
-      - PGID=1000
-      - WEBUI_PORT=8085
-    volumes:
-      - ./qb/config:/config
-      - /mnt/nas/wenwen:/wenwen
-    ports:
-      - 8085:8085 # WebUI
-      - 6881:6881 # BT 数据端口
-      - 6881:6881/udp
-    restart: unless-stopped
-
   aria2-next:
     image: ghcr.io/aninsomniacy/aria2-next:latest
     container_name: aria2-next
@@ -63,15 +47,16 @@ services:
       - /mnt/nas/wenwen:/wenwen
     ports:
       - 6800:6800 # JSON-RPC（AriaNg / amine-downloader 用）
+      - 6881:6881 # BT TCP
+      - 6881:6881/udp # BT UDP / DHT（磁力需要）
     # 可选：启动前 cp docker/aria2.example.conf ./aria2/config/aria2.conf
-    # 只发布 RPC；BT 端口不发布（BT 交给 qbittorrent，且避开它的 6881）
     command:
       - "--conf-path=/config/aria2.conf"
       - "--rpc-secret=CHANGE_ME_RPC_SECRET" # ← 改成你的密钥，并同步到 amine 配置
       - "--dir=/wenwen/downloads"
       - "--state-dir=/var/lib/aria2-next"
-      - "--listen-port=6999"
-      - "--dht-listen-port=6999"
+      - "--listen-port=6881"
+      - "--dht-listen-port=6881"
     restart: unless-stopped
 
   ariang:
