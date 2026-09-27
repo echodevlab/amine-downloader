@@ -474,6 +474,21 @@ docker run -d --name amine-downloader \
 docker build -t amine-downloader .
 ```
 
+### 一键全家桶（docker compose）
+
+仓库根目录的 `docker-compose.yml` 把 **Jellyfin / qBittorrent / aria2-next / AriaNg /
+amine-downloader** 串在一起：
+
+```bash
+mkdir -p amine/config
+cp docker/config.example.toml amine/config/config.toml   # 改里面的地址与 RPC 密钥
+docker compose up -d
+```
+
+端口：Web UI `8420`、AriaNg `6880`、qBittorrent WebUI `8085`、Jellyfin `8096`。
+所有容器都挂载 `/mnt/nas/wenwen` 到同一路径 `/wenwen`，因此 amine-downloader 能直接看到
+aria2 写下的文件（磁力磁盘重命名需要）。
+
 > 镜像已用 `playwright install-deps` 装好 Chromium 的系统依赖，并在构建期预下载了 CloakBrowser
 > 二进制（`WITH_BROWSER=1`，默认开启），因此**容器内也能直接做 Kazumi 视频嗅探**。
 > 想缩小镜像用 `docker build --build-arg WITH_BROWSER=0 .`（首次嗅探时会自动下载，见

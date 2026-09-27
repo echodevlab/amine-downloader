@@ -1,0 +1,101 @@
+# amine-downloader 全家桶
+#
+#   jellyfin        媒体服务器
+#   qbittorrent     BT 下载（服务端重命名）
+#   aria2-next      HTTP / HLS / 磁力（Kazumi 解析下载用）
+#   ariang          aria2 的 Web 前端
+#   amine-downloader  本项目：订阅 / 解析 / 重命名 / 直接入库 + Web UI
+#
+# 用法：
+#   mkdir -p amine/config
+#   cp docker/config.example.toml amine/config/config.toml   # 然后改里面的地址/密钥
+#   docker compose up -d
+#   # Web UI:  http://<host>:8420
+#   # AriaNg:  http://<host>:6880
+#   # Jellyfin:http://<host>:8096
+#
+# 说明：
+#   - PUID/PGID = 宿主机用户的 uid/gid（下载文件属主）。
+#   - /mnt/nas/wenwen 是 QNAP 共享，所有容器挂到同一路径 /wenwen，
+#     这样 amine-downloader 能直接看到 aria2 写下的文件（磁力磁盘重命名需要）。
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    network_mode: host # 直接用宿主机网络，WebUI 走 8096
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./jellyfin/config:/config
+      - /mnt/nas/wenwen/media:/media:ro # 整个 media 进来，建库时再细分
+    devices:
+      - /dev/dri:/dev/dri # Intel/AMD 核显硬解；没有核显就删掉这两行
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - TZ=Asia/Shanghai
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=8085
+    volumes:
+      - ./qb/config:/config
+      - /mnt/nas/wenwen:/wenwen
+    ports:
+      - 8085:8085 # WebUI
+      - 6881:6881 # BT 数据端口
+      - 6881:6881/udp
+    restart: unless-stopped
+
+  aria2-next:
+    image: ghcr.io/aninsomniacy/aria2-next:latest
+    container_name: aria2-next
+    environment:
+      - TZ=Asia/Shanghai
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./aria2/config:/config
+      - ./aria2/state:/var/lib/aria2-next
+      - /mnt/nas/wenwen:/wenwen
+    ports:
+      - 6800:6800 # JSON-RPC（AriaNg / amine-downloader 用）
+    # 只发布 RPC；BT 端口不发布（BT 交给 qbittorrent，且避开它的 6881）
+    command:
+      - "--conf-path=/config/aria2.conf"
+      - "--rpc-secret=CHANGE_ME_RPC_SECRET" # ← 改成你的密钥，并同步到 amine 配置
+      - "--dir=/wenwen/downloads"
+      - "--state-dir=/var/lib/aria2-next"
+      - "--listen-port=6999"
+      - "--dht-listen-port=6999"
+    restart: unless-stopped
+
+  ariang:
+    image: p3terx/ariang:latest
+    container_name: ariang
+    environment:
+      - TZ=Asia/Shanghai
+    command: --port 6880
+    ports:
+      - 6880:6880 # AriaNg WebUI
+    restart: unless-stopped
+
+  amine-downloader:
+    image: ${AMINE_IMAGE:-ghcr.io/wenwen12345/amine-downloader:latest}
+    container_name: amine-downloader
+    environment:
+      - TZ=Asia/Shanghai
+      - AMINE_DOWNLOADER_CONFIG=/config/config.toml
+    volumes:
+      - ./amine/config:/config # 配置 / SQLite / 规则 / 浏览器缓存
+      - /mnt/nas/wenwen:/wenwen # 与 aria2 同一路径，便于磁盘重命名
+    ports:
+      - 8420:8420 # Web UI
+    depends_on:
+      - aria2-next
+    restart: unless-stopped
+
+networks: {}

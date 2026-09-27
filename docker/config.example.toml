@@ -1,0 +1,66 @@
+# amine-downloader 配置示例（Docker）
+# 复制到 ./amine/config/config.toml 后按需修改。
+# 容器内各服务通过 compose 网络用服务名互访：qbittorrent / aria2-next。
+
+[app]
+# 主下载器：qbittorrent 或 aria2
+downloader = "aria2"
+rename = true
+rename_template = "[{group}] {title} S{season}E{episode} [{resolution}]"
+save_path = ""
+category = "amine"
+# 字幕组集数与番剧集数不一致时的偏移
+episode_offset = 0
+
+[qbittorrent]
+url = "http://qbittorrent:8085"
+# qBittorrent >= 5.2 推荐用 API Key（设置后优先于用户名/密码）
+api_key = ""
+username = "admin"
+password = "adminadmin"
+
+[aria2]
+rpc_url = "http://aria2-next:6800/jsonrpc"
+secret = "CHANGE_ME_RPC_SECRET" # 与 docker-compose.yml 里的 --rpc-secret 保持一致
+download_dir = "/wenwen/downloads"
+# 与 download_dir 相同（amine 与 aria2 挂了同一个 /wenwen），无需再做映射
+local_dir = "/wenwen/downloads"
+
+# 下载直接入库：文件直接落到媒体库结构，Jellyfin 可直接识别
+[library]
+enabled = true
+root = "/wenwen/media/anime"
+local_root = "/wenwen/media/anime"
+series_template = "{title}"
+season_template = "Season {season}"
+
+[kazumi]
+rules_dir = "/config/kazumi-rules"
+rename_template = "{title} S{season}E{episode}"
+preferred_quality = "1080p"
+# auto / native / segments
+media_mode = "auto"
+headless = true
+# 首次嗅探自动下载 CloakBrowser 的 Chromium 二进制
+auto_install_browser = true
+temp_dir = "/tmp"
+
+# 标题别名：把解析出的标题统一成固定名称（可选）
+# [titles]
+# "葬送的芙莉莲 第二季" = "葬送的芙莉莲"
+
+# RSS 订阅（可选）
+# [[rss]]
+# name = "Mikan - 葬送的芙莉莲"
+# url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
+# enabled = true
+# title = "葬送的芙莉莲"
+
+# Kazumi 解析追番（可选）
+# [[kazumi.subscribe]]
+# name = "葬送的芙莉莲"
+# rule = "AGE"
+# hit = 0
+# road = 0
+# quality = "1080p"
+# title = "葬送的芙莉莲"
