@@ -137,6 +137,7 @@ class KazumiService:
                 proxy=str(self.settings.get("proxy") or "") or None,
                 license_key=str(self.settings.get("license_key") or "") or None,
                 temp_dir=str(self.settings.get("temp_dir") or "") or None,
+                auto_install=bool(self.settings.get("auto_install_browser", True)),
             )
         return self._sniffer.sniff(page_url, timeout=float(self.settings.get("sniff_timeout", 30)))
 

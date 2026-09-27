@@ -76,6 +76,28 @@ class _FakeBrowser:
         self.closed = True
 
 
+def test_browser_sniffer_auto_installs(monkeypatch):
+    calls = {"ensure": 0, "launch": 0}
+    browser = _FakeBrowser()
+
+    def fake_ensure():
+        calls["ensure"] += 1
+
+    def fake_launch(**kwargs):
+        calls["launch"] += 1
+        return browser
+
+    module = types.ModuleType("cloakbrowser")
+    module.ensure_binary = fake_ensure
+    module.launch = fake_launch
+    monkeypatch.setitem(sys.modules, "cloakbrowser", module)
+
+    sniffer = BrowserSniffer(auto_install=True)
+    sniffer.sniff("https://site.test/play/1")
+    assert calls == {"ensure": 1, "launch": 1}
+    sniffer.close()
+
+
 def test_browser_sniffer_reuses_one_browser(monkeypatch):
     browser = _FakeBrowser()
     launches = {"count": 0}

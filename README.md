@@ -371,6 +371,8 @@ sniff_timeout = 30
 license_key = ""
 # 浏览器嗅探临时目录（系统临时目录不可写时指定）
 temp_dir = ""
+# 首次嗅探时自动下载 CloakBrowser 的 Chromium 二进制（约 200MB）
+auto_install_browser = true
 # 代理（可选）
 proxy = ""
 # ffmpeg 路径（可选，用于把 m3u8 合并结果转成 mp4 / 下载加密流）
@@ -388,8 +390,9 @@ quality = "1080p"
 
 ### 说明与限制
 
-- **首次嗅探会下载 CloakBrowser 的 Chromium 二进制（约 200MB）**，请预留时间与磁盘。
-  可先运行 `uv run python -m cloakbrowser install` 预下载。
+- **首次嗅探会自动下载 CloakBrowser 的 Chromium 二进制（约 200MB）**，请预留时间与磁盘。
+  由 `[kazumi].auto_install_browser`（默认 `true`）控制；也可先手动预下载
+  `uv run python -m cloakbrowser install`，或设 `CLOAKBROWSER_CACHE_DIR` 指定缓存位置。
 - CloakBrowser 免费版在启动时会打印一段横幅，一次 `run` 只启动一次浏览器（整批剧集复用同一实例），
   因此横幅只会出现一次。
 - 若系统临时目录不可写（或想放到大磁盘），设置 `[kazumi].temp_dir` 指定一个可写目录。
@@ -471,8 +474,10 @@ docker run -d --name amine-downloader \
 docker build -t amine-downloader .
 ```
 
-> 镜像内**未安装 Chromium 的系统依赖**，所以容器内做 Kazumi 视频嗅探还需要额外装依赖
-> （或用本机/另一容器跑嗅探）。BT/RSS、aria2/qB 下载、Web UI 都不受影响。
+> 镜像已用 `playwright install-deps` 装好 Chromium 的系统依赖，并在构建期预下载了 CloakBrowser
+> 二进制（`WITH_BROWSER=1`，默认开启），因此**容器内也能直接做 Kazumi 视频嗅探**。
+> 想缩小镜像用 `docker build --build-arg WITH_BROWSER=0 .`（首次嗅探时会自动下载，见
+> `[kazumi].auto_install_browser`）。
 
 ## 工作原理
 

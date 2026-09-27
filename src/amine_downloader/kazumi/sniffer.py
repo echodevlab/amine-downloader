@@ -75,6 +75,7 @@ class BrowserSniffer:
         proxy: str | None = None,
         license_key: str | None = None,
         temp_dir: str | None = None,
+        auto_install: bool = True,
     ) -> None:
         self.headless = headless
         self.humanize = humanize
@@ -83,8 +84,25 @@ class BrowserSniffer:
         self.proxy = proxy
         self.license_key = license_key
         self.temp_dir = temp_dir
+        self.auto_install = auto_install
         self._browser = None
         self._context = None
+
+    def _install_binary(self) -> None:
+        """Download the CloakBrowser Chromium binary on first use."""
+
+        ensure = None
+        try:
+            from cloakbrowser import ensure_binary as ensure  # type: ignore[attr-defined]
+        except ImportError:
+            try:
+                from cloakbrowser.download import ensure_binary as ensure  # type: ignore[no-redef]
+            except ImportError:
+                return
+        try:
+            ensure()
+        except Exception as exc:  # noqa: BLE001 - cloakbrowser raises many types
+            raise AmineError(f"下载 CloakBrowser 二进制失败: {exc}") from exc
 
     def _ensure(self) -> None:
         if self._context is not None:
@@ -93,6 +111,9 @@ class BrowserSniffer:
             from cloakbrowser import launch
         except ImportError as exc:  # pragma: no cover - depends on optional install
             raise AmineError("需要 CloakBrowser 才能嗅探视频：uv add cloakbrowser") from exc
+
+        if self.auto_install:
+            self._install_binary()
 
         if self.temp_dir:
             directory = Path(self.temp_dir).expanduser()
@@ -182,6 +203,7 @@ def sniff(
     proxy: str | None = None,
     license_key: str | None = None,
     temp_dir: str | None = None,
+    auto_install: bool = True,
 ) -> list[str]:
     """One-shot convenience wrapper around :class:`BrowserSniffer`."""
 
@@ -193,6 +215,7 @@ def sniff(
         proxy=proxy,
         license_key=license_key,
         temp_dir=temp_dir,
+        auto_install=auto_install,
     )
     try:
         return sniffer.sniff(url, timeout=timeout)

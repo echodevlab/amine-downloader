@@ -83,6 +83,8 @@ sniff_timeout = 30
 license_key = ""
 # 浏览器嗅探的临时目录（默认系统临时目录；不可写时请指定）
 temp_dir = ""
+# 首次嗅探时自动下载 CloakBrowser 的 Chromium 二进制（约 200MB）
+auto_install_browser = true
 # 代理（可选，如 http://user:pass@host:port 或 socks5://host:port）
 proxy = ""
 # ffmpeg 路径（可选，用于把 m3u8 合并结果转成 mp4）
