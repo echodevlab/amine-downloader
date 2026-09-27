@@ -480,8 +480,9 @@ docker build -t amine-downloader .
 amine-downloader** 串在一起：
 
 ```bash
-mkdir -p amine/config
+mkdir -p amine/config aria2/config
 cp docker/config.example.toml amine/config/config.toml   # 改里面的地址与 RPC 密钥
+cp docker/aria2.example.conf aria2/config/aria2.conf      # 可选：aria2 完整配置（含 NAS 优化）
 docker compose up -d
 ```
 

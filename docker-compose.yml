@@ -63,6 +63,7 @@ services:
       - /mnt/nas/wenwen:/wenwen
     ports:
       - 6800:6800 # JSON-RPC（AriaNg / amine-downloader 用）
+    # 可选：启动前 cp docker/aria2.example.conf ./aria2/config/aria2.conf
     # 只发布 RPC；BT 端口不发布（BT 交给 qbittorrent，且避开它的 6881）
     command:
       - "--conf-path=/config/aria2.conf"
