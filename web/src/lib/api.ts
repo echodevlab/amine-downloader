@@ -78,6 +78,15 @@ export type Status = {
   kazumi_subscriptions: number
 }
 
+export type ConfigData = {
+  config_path: string
+  app: Record<string, unknown>
+  aria2: Record<string, unknown>
+  qbittorrent: Record<string, unknown>
+  library: Record<string, unknown>
+  kazumi: Record<string, unknown>
+}
+
 export type Job = {
   id: string
   kind: string
@@ -184,4 +193,15 @@ export const api = {
   jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job & { events: JobEvent[] }>(`/api/jobs/${id}`),
   cancelJob: (id: string) => request<{ ok: boolean }>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  getConfig: () => request<ConfigData>("/api/config"),
+  saveConfig: (body: Record<string, unknown>) =>
+    request<{ ok: boolean; config_path: string }>("/api/config", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  testConfig: (body: Record<string, unknown>) =>
+    request<{ ok: boolean; downloader: string; connection: string }>("/api/config/test", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 }

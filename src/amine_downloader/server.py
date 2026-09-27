@@ -5,16 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
+import tomllib
 from dataclasses import asdict
 from pathlib import Path
 
+import tomli_w
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from .config import AppConfig, kazumi_rules_dir
+from .config import AppConfig, default_config_path, kazumi_rules_dir
+from .downloaders import create_downloader
 from .downloaders.base import DownloadError
 from .errors import AmineError
 from .jobs import manager
@@ -487,6 +491,116 @@ async def job_events(request):
     )
 
 
+# -- config ---------------------------------------------------------------
+_SECRET_KEYS = {"secret", "api_key", "password"}
+_CONFIG_SECTIONS = ("app", "aria2", "qbittorrent", "library", "kazumi")
+
+
+def _config_file() -> Path:
+    return Path(_CONFIG_PATH) if _CONFIG_PATH else default_config_path()
+
+
+def _read_raw() -> dict:
+    path = _config_file()
+    if not path.exists():
+        return {}
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def _merge_raw(raw: dict, body: dict) -> dict:
+    merged = dict(raw)
+    for section in _CONFIG_SECTIONS:
+        incoming = body.get(section)
+        if not isinstance(incoming, dict):
+            continue
+        target = dict(merged.get(section) or {})
+        for key, value in incoming.items():
+            if value is None:
+                continue
+            if key in _SECRET_KEYS and value in ("", "******"):
+                continue  # 留空表示保持原值
+            target[key] = value
+        merged[section] = target
+    return merged
+
+
+async def get_config(request) -> JSONResponse:
+    config = _load_config()
+    aria2 = dict(config.aria2 or {})
+    aria2["secret_set"] = bool(aria2.pop("secret", ""))
+    qb = dict(config.qbittorrent or {})
+    qb["api_key_set"] = bool(qb.pop("api_key", ""))
+    qb["password_set"] = bool(qb.pop("password", ""))
+    return JSONResponse(
+        {
+            "config_path": str(config.path) if config.path else "",
+            "app": {
+                "downloader": config.downloader,
+                "rename": config.rename,
+                "rename_template": config.rename_template,
+                "save_path": config.save_path,
+                "category": config.category,
+                "episode_offset": config.episode_offset,
+            },
+            "aria2": aria2,
+            "qbittorrent": qb,
+            "library": dict(config.library or {}),
+            "kazumi": dict(config.kazumi or {}),
+        }
+    )
+
+
+async def put_config(request) -> JSONResponse:
+    body = await request.json()
+
+    def work():
+        path = _config_file()
+        merged = _merge_raw(_read_raw(), body)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            path.with_suffix(path.suffix + ".bak").write_text(
+                path.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        path.write_text(tomli_w.dumps(merged), encoding="utf-8")
+        return {"ok": True, "config_path": str(path)}
+
+    return await _run(work)
+
+
+async def test_config(request) -> JSONResponse:
+    body = await request.json() if request.method == "POST" else {}
+
+    def work():
+        raw = _merge_raw(_read_raw(), body)
+        handle = tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False, encoding="utf-8")
+        try:
+            handle.write(tomli_w.dumps(raw))
+            handle.close()
+            config = AppConfig.load(handle.name)
+            client = create_downloader(config)
+            try:
+                return {
+                    "ok": True,
+                    "downloader": client.name,
+                    "connection": client.test_connection(),
+                }
+            finally:
+                client.close()
+        finally:
+            Path(handle.name).unlink(missing_ok=True)
+
+    return await _run(work)
+
+
+async def config_endpoint(request) -> JSONResponse:
+    if request.method == "GET":
+        return await get_config(request)
+    return await put_config(request)
+
+
 # -- static ---------------------------------------------------------------
 async def spa(request):
     path = request.path_params.get("path", "")
@@ -522,6 +636,8 @@ routes = [
     Route("/api/jobs/{id}/events", job_events),
     Route("/api/jobs/{id}/cancel", job_cancel, methods=["POST"]),
     Route("/api/jobs/{id}", job_detail),
+    Route("/api/config", config_endpoint, methods=["GET", "PUT"]),
+    Route("/api/config/test", test_config, methods=["POST"]),
 ]
 
 if _DIST.exists():

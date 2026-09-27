@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react"
+import { useTheme } from "next-themes"
 import { Toaster } from "sonner"
 import {
   Download,
   History,
   ListChecks,
+  Monitor,
+  Moon,
   RefreshCw,
   Rss as RssIcon,
+  Settings,
+  Sun,
   Wand2,
   Wrench,
 } from "lucide-react"
@@ -17,6 +22,7 @@ import HistoryPage from "@/pages/History"
 import JobsPage from "@/pages/Jobs"
 import KazumiPage from "@/pages/Kazumi"
 import RssPage from "@/pages/Rss"
+import SettingsPage from "@/pages/Settings"
 import ToolsPage from "@/pages/Tools"
 
 const NAV = [
@@ -26,11 +32,26 @@ const NAV = [
   { key: "kazumi", label: "解析下载", icon: Wand2 },
   { key: "jobs", label: "任务", icon: ListChecks },
   { key: "tools", label: "工具", icon: Wrench },
+  { key: "settings", label: "设置", icon: Settings },
 ] as const
 
 type NavKey = (typeof NAV)[number]["key"]
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+  const current = theme ?? "system"
+  const next = current === "light" ? "dark" : current === "dark" ? "system" : "light"
+  const Icon = current === "light" ? Sun : current === "dark" ? Moon : Monitor
+  const label = current === "light" ? "浅色" : current === "dark" ? "深色" : "跟随系统"
+  return (
+    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setTheme(next)}>
+      <Icon /> {label}
+    </Button>
+  )
+}
+
 export default function App() {
+  const { resolvedTheme } = useTheme()
   const [page, setPage] = useState<NavKey>("downloads")
   const [status, setStatus] = useState<Status | null>(null)
   const [statusError, setStatusError] = useState("")
@@ -89,6 +110,9 @@ export default function App() {
               <RefreshCw /> 刷新状态
             </Button>
           </div>
+          <div className="mt-2">
+            <ThemeToggle />
+          </div>
         </aside>
         <main className="min-w-0 flex-1">
           {page === "downloads" && <Dashboard />}
@@ -97,9 +121,10 @@ export default function App() {
           {page === "kazumi" && <KazumiPage onNavigate={goToJobs} />}
           {page === "jobs" && <JobsPage />}
           {page === "tools" && <ToolsPage />}
+          {page === "settings" && <SettingsPage />}
         </main>
       </div>
-      <Toaster theme="system" richColors position="top-center" />
+      <Toaster theme={resolvedTheme === "dark" ? "dark" : "light"} richColors position="top-center" />
     </div>
   )
 }

@@ -35,11 +35,16 @@ def _first_text(element: ET.Element, *names: str) -> str:
     return ""
 
 
+def _is_torrent_url(value: str) -> bool:
+    lowered = value.strip().lower()
+    return lowered.endswith(".torrent") or lowered.startswith("magnet:")
+
+
 def _find_torrent_url(element: ET.Element, description: str) -> str:
     for child in element.iter():
         for attr in ("url", "href", "src"):
             value = child.get(attr)
-            if value and value.lower().endswith(".torrent"):
+            if value and _is_torrent_url(value):
                 return value.strip()
     magnet = _MAGNET_RE.search(description or "")
     if magnet:
