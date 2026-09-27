@@ -237,7 +237,7 @@ Web UI：解析下载页有「标题（可选覆盖）」输入框；历史记�
 | `remove ID [--delete-files]` | 移除任务 |
 | `kazumi rules [--json]` | 列出已导入的 Kazumi 规则 |
 | `kazumi import SOURCE...` | 导入规则（本地文件或 URL） |
-| `kazumi search KEYWORD [--rule R] [--json]` | 按规则搜索番剧 |
+| `kazumi search KEYWORD [--rule R] [--json]` | 搜索番剧（省略 `--rule` 则**并发搜索全部规则**，返回所有结果）|
 | `kazumi chapters KEYWORD [--rule R] [--hit N] [--json]` | 查看播放线路与剧集 |
 | `kazumi download KEYWORD [--rule R] [--road N] [--episode N] [--quality Q] [--url U] [--dry-run]` | 解析并下载（交给 aria2） |
 | `kazumi run [NAME...] [--limit N] [--dry-run]` | 按 `[[kazumi.subscribe]]` 批量追番（自动跳过已下载） |
@@ -349,10 +349,11 @@ amine-downloader kazumi rules
 
 ```bash
 # 搜索
-amine-downloader kazumi search "葬送的芙莉莲" --rule AGE
+amine-downloader kazumi search "葬送的芙莉莲"            # 并发搜索全部规则，返回所有结果
+amine-downloader kazumi search "葬送的芙莉莲" --rule AGE  # 只用某一条规则
 
-# 查看播放线路与剧集
-amine-downloader kazumi chapters "葬送的芙莉莲" --rule AGE --hit 0
+# 查看播放线路与剧集（--hit 选第几个搜索结果）
+amine-downloader kazumi chapters "葬送的芙莉莲" --hit 0
 
 # 解析并下载（交给 aria2）
 amine-downloader kazumi download "葬送的芙莉莲" --rule AGE --road 0 --episode 1

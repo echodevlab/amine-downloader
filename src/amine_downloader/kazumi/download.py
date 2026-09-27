@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -159,15 +160,54 @@ class KazumiService:
         raise AmineError("存在多条规则，请用 --rule 指定（可用规则见 `kazumi rules`）")
 
     # -- search / chapters ------------------------------------------------
-    def search(self, keyword: str, *, rule_name: str | None = None) -> list[KazumiSearchHit]:
-        rules = [self.require_rule(rule_name)] if rule_name else self.available_rules()
-        if not rules:
-            raise AmineError("规则目录为空，请先导入规则")
+    def search_all(
+        self,
+        keyword: str,
+        *,
+        rules: list[KazumiRule] | None = None,
+        max_workers: int | None = None,
+        on_event=None,
+    ) -> tuple[list[KazumiSearchHit], list[str]]:
+        """Search every rule **concurrently**; a failing source is skipped."""
+
+        selected = rules if rules is not None else self.available_rules()
         hits: list[KazumiSearchHit] = []
-        for rule in rules:
+        errors: list[str] = []
+        if not selected:
+            return hits, errors
+
+        workers = max_workers or int(self.settings.get("search_workers", 8) or 8)
+        workers = max(1, min(workers, len(selected)))
+
+        def query(rule: KazumiRule):
             with RuleClient(rule) as client:
-                for item in client.search(keyword):
+                return client.search(keyword)
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(query, rule): rule for rule in selected}
+            for future in as_completed(futures):
+                rule = futures[future]
+                try:
+                    items = future.result()
+                except Exception as exc:  # noqa: BLE001 - 单个源失败不影响其它
+                    errors.append(f"{rule.name}: {exc}")
+                    if on_event is not None:
+                        on_event({"type": "log", "message": f"[{rule.name}] 失败: {exc}"})
+                    continue
+                if on_event is not None:
+                    on_event({"type": "log", "message": f"[{rule.name}] {len(items)} 条"})
+                for item in items:
                     hits.append(KazumiSearchHit(rule=rule, item=item))
+        return hits, errors
+
+    def search(self, keyword: str, *, rule_name: str | None = None, on_event=None) -> list[KazumiSearchHit]:
+        if rule_name:
+            rules = [self.require_rule(rule_name)]
+        else:
+            rules = self.available_rules()
+            if not rules:
+                raise AmineError("规则目录为空，请先导入规则")
+        hits, _errors = self.search_all(keyword, rules=rules, on_event=on_event)
         return hits
 
     def chapters(self, rule: KazumiRule, item: SearchItem) -> list[Road]:

@@ -366,7 +366,13 @@ def cmd_kazumi_import(args) -> int:
 def cmd_kazumi_search(args) -> int:
     service = _load_kazumi(args)
     try:
-        hits = service.search(args.keyword, rule_name=args.rule)
+        if args.rule:
+            rules = [service.require_rule(args.rule)]
+        else:
+            rules = service.available_rules()
+            if not rules:
+                raise AmineError("规则目录为空，请先导入规则")
+        hits, errors = service.search_all(args.keyword, rules=rules)
     except AmineError as exc:
         print(f"错误: {exc}", file=sys.stderr)
         return 1
@@ -374,22 +380,27 @@ def cmd_kazumi_search(args) -> int:
         service.close()
     if args.json:
         _print_json(
-            [
-                {
-                    "rule": hit.rule.name,
-                    "name": hit.item.name,
-                    "source": hit.item.source,
-                    "page_url": hit.item.page_url,
-                }
-                for hit in hits
-            ]
+            {
+                "hits": [
+                    {
+                        "rule": hit.rule.name,
+                        "name": hit.item.name,
+                        "source": hit.item.source,
+                        "page_url": hit.item.page_url,
+                    }
+                    for hit in hits
+                ],
+                "errors": errors,
+            }
         )
         return 0
     if not hits:
         print("没有搜索结果。")
-        return 0
-    for index, hit in enumerate(hits):
-        print(f"[{index}] ({hit.rule.name}) {hit.item.name}")
+    else:
+        for index, hit in enumerate(hits):
+            print(f"[{index}] ({hit.rule.name}) {hit.item.name}")
+    if errors:
+        print(f"（{len(errors)} 个源失败：{'；'.join(errors[:3])}）", file=sys.stderr)
     return 0
 
 

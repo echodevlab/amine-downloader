@@ -56,6 +56,37 @@ def patch(service, roads):
     service.chapters = lambda *a, **k: roads
 
 
+def test_search_all_concurrent_and_tolerant(tmp_path, monkeypatch):
+    import amine_downloader.kazumi.download as download_module
+
+    rules = [
+        KazumiRule.from_dict({"name": "A"}),
+        KazumiRule.from_dict({"name": "B"}),
+        KazumiRule.from_dict({"name": "C"}),
+    ]
+
+    class FakeClient:
+        def __init__(self, rule):
+            self.rule = rule
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def search(self, keyword):
+            if self.rule.name == "B":
+                raise RuntimeError("boom")
+            return [SearchItem(name=f"{self.rule.name}-hit", source="x")]
+
+    monkeypatch.setattr(download_module, "RuleClient", FakeClient)
+    service = build_service(tmp_path, FakeAria2(tmp_path), [])
+    hits, errors = service.search_all("kw", rules=rules)
+    assert sorted(hit.item.name for hit in hits) == ["A-hit", "C-hit"]
+    assert len(errors) == 1 and errors[0].startswith("B:")
+
+
 def test_subscription_downloads_and_dedups(tmp_path):
     fake = FakeAria2(tmp_path)
     service = build_service(tmp_path, fake, [KazumiSubscription(name="芙莉莲", rule="Test")])

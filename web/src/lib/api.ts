@@ -168,7 +168,7 @@ export const api = {
       body: JSON.stringify({ sources }),
     }),
   kazumiSearch: (q: string, rule?: string) =>
-    request<KazumiHit[]>(
+    request<{ hits: KazumiHit[]; errors: string[] }>(
       `/api/kazumi/search?q=${encodeURIComponent(q)}${rule ? `&rule=${encodeURIComponent(rule)}` : ""}`,
     ),
   kazumiChapters: (q: string, rule: string | undefined, hit: number) =>

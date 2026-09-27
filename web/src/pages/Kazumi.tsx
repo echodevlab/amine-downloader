@@ -38,6 +38,7 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
   const [keyword, setKeyword] = useState("")
   const [rule, setRule] = useState("")
   const [hits, setHits] = useState<KazumiHit[]>([])
+  const [searchErrors, setSearchErrors] = useState<string[]>([])
   const [hitIndex, setHitIndex] = useState(0)
   const [chapters, setChapters] = useState<KazumiChapters | null>(null)
   const [road, setRoad] = useState(0)
@@ -88,10 +89,12 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
     setBusy(true)
     setChapters(null)
     try {
-      const found = await api.kazumiSearch(keyword.trim(), rule || undefined)
-      setHits(found)
+      const result = await api.kazumiSearch(keyword.trim(), rule || undefined)
+      setHits(result.hits)
+      setSearchErrors(result.errors)
       setHitIndex(0)
-      if (!found.length) toast.message("没有搜索结果")
+      if (!result.hits.length) toast.message("没有搜索结果")
+      if (result.errors.length) toast.message(`${result.errors.length} 个源失败`)
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -208,7 +211,7 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
                 value={rule}
                 onChange={(event) => setRule(event.target.value)}
               >
-                <option value="">自动（仅一条时）</option>
+                <option value="">全部规则（并发）</option>
                 {rules.map((item) => (
                   <option key={item.name} value={item.name}>
                     {item.name}
@@ -221,6 +224,12 @@ export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") =
             </Button>
           </div>
 
+          {hits.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              共 {hits.length} 个结果，来自 {new Set(hits.map((hit) => hit.rule)).size} 个源
+              {searchErrors.length ? `（${searchErrors.length} 个源失败）` : ""}
+            </div>
+          )}
           {hits.length > 0 && (
             <Table>
               <TableHeader>

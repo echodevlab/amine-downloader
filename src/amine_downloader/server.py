@@ -238,10 +238,20 @@ async def kazumi_search(request) -> JSONResponse:
     def work():
         service = KazumiService(_load_config())
         try:
-            return [
-                {"rule": hit.rule.name, "name": hit.item.name, "source": hit.item.source}
-                for hit in service.search(keyword, rule_name=rule)
-            ]
+            if rule:
+                rules = [service.require_rule(rule)]
+            else:
+                rules = service.available_rules()
+                if not rules:
+                    raise AmineError("规则目录为空，请先导入规则")
+            hits, errors = service.search_all(keyword, rules=rules)
+            return {
+                "hits": [
+                    {"rule": hit.rule.name, "name": hit.item.name, "source": hit.item.source}
+                    for hit in hits
+                ],
+                "errors": errors,
+            }
         finally:
             service.close()
 
