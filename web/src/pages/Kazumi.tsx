@@ -25,7 +25,6 @@ import {
   api,
   type KazumiChapters,
   type KazumiHit,
-  type KazumiResult,
   type KazumiRule,
   type KazumiSubscription,
 } from "@/lib/api"
@@ -33,40 +32,7 @@ import {
 const selectClass =
   "h-8 rounded-lg border border-border bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 
-function ResultTable({ results }: { results: KazumiResult[] }) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>番剧</TableHead>
-          <TableHead>集</TableHead>
-          <TableHead>类型</TableHead>
-          <TableHead>结果</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {results.map((item, index) => (
-          <TableRow key={index}>
-            <TableCell>{item.title}</TableCell>
-            <TableCell className="tabular-nums">{item.episode || "-"}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.kind || "-"}</Badge>
-            </TableCell>
-            <TableCell className="max-w-96 truncate" title={item.output || item.stream_url || item.skipped}>
-              {item.skipped ? (
-                <span className="text-muted-foreground">{item.skipped}</span>
-              ) : (
-                item.output || item.task_id || item.stream_url
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  )
-}
-
-export default function KazumiPage() {
+export default function KazumiPage({ onNavigate }: { onNavigate: (key: "jobs") => void }) {
   const [rules, setRules] = useState<KazumiRule[]>([])
   const [importSource, setImportSource] = useState("")
   const [keyword, setKeyword] = useState("")
@@ -77,7 +43,6 @@ export default function KazumiPage() {
   const [road, setRoad] = useState(0)
   const [episode, setEpisode] = useState("")
   const [quality, setQuality] = useState("")
-  const [results, setResults] = useState<KazumiResult[]>([])
   const [subs, setSubs] = useState<KazumiSubscription[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -150,7 +115,7 @@ export default function KazumiPage() {
   async function download(dryRun: boolean) {
     setBusy(true)
     try {
-      const items = await api.kazumiDownload({
+      await api.createJob("kazumi_download", {
         keyword: keyword.trim(),
         rule: rule || undefined,
         hit: hitIndex,
@@ -159,8 +124,8 @@ export default function KazumiPage() {
         quality: quality || undefined,
         dry_run: dryRun,
       })
-      setResults(items)
-      toast.success(dryRun ? `解析到 ${items.length} 条` : `处理了 ${items.length} 条`)
+      toast.success("任务已创建，可在「任务」中查看进度")
+      onNavigate("jobs")
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -171,9 +136,9 @@ export default function KazumiPage() {
   async function runSubs(dryRun: boolean) {
     setBusy(true)
     try {
-      const items = await api.kazumiRun({ dry_run: dryRun })
-      setResults(items)
-      toast.success(`处理了 ${items.length} 条`)
+      await api.createJob("kazumi_run", { dry_run: dryRun })
+      toast.success("任务已创建，可在「任务」中查看进度")
+      onNavigate("jobs")
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -391,17 +356,6 @@ export default function KazumiPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {results.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>结果</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResultTable results={results} />
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

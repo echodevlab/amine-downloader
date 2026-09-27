@@ -228,10 +228,16 @@ class DownloadService:
         limit: int | None = None,
         dry_run: bool = False,
         rename: bool = True,
+        on_event=None,
     ) -> list[RunItem]:
+        def emit(event: dict) -> None:
+            if on_event is not None:
+                on_event(event)
+
         results: list[RunItem] = []
         for feed in self.enabled_feeds(feed_names):
             episodes = fetch_feed(feed.url)
+            emit({"type": "log", "message": f"[{feed.name}] 获取到 {len(episodes)} 条"})
             selected: list[RssEpisode] = []
             for episode in episodes:
                 if not episode.torrent_url:
@@ -246,6 +252,7 @@ class DownloadService:
             for episode in selected:
                 if dry_run:
                     results.append(RunItem(episode=episode, skipped="dry-run"))
+                    emit({"type": "item", "item": {"title": episode.title, "skipped": "dry-run"}})
                     continue
                 try:
                     task = self.add_torrent(
@@ -257,8 +264,20 @@ class DownloadService:
                     )
                 except Exception as exc:  # noqa: BLE001
                     results.append(RunItem(episode=episode, skipped=f"error: {exc}"))
+                    emit({"type": "item", "item": {"title": episode.title, "skipped": str(exc)}})
                     continue
                 results.append(RunItem(episode=episode, task=task))
+                emit(
+                    {
+                        "type": "item",
+                        "item": {
+                            "title": episode.title,
+                            "name": task.title,
+                            "episode": task.episode,
+                            "task_id": task.torrent_id,
+                        },
+                    }
+                )
         return results
 
     def close(self) -> None:

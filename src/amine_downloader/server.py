@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from dataclasses import asdict
 from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import FileResponse, JSONResponse
+from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from .config import AppConfig, kazumi_rules_dir
 from .downloaders.base import DownloadError
 from .errors import AmineError
+from .jobs import manager
 from .kazumi import KazumiService, RuleStore
 from .parser import parse_title
 from .renamer import render
@@ -130,6 +133,17 @@ async def rss_feeds(request) -> JSONResponse:
     return JSONResponse([asdict(feed) for feed in config.rss])
 
 
+def _rss_item(item) -> dict:
+    return {
+        "title": item.episode.title,
+        "group": item.episode.parsed.group if item.episode.parsed else "",
+        "name": item.episode.parsed.title if item.episode.parsed else "",
+        "episode": item.episode.parsed.episode if item.episode.parsed else "",
+        "task_id": item.task.torrent_id if item.task else "",
+        "skipped": item.skipped,
+    }
+
+
 async def run_rss(request) -> JSONResponse:
     body = await request.json() if request.method == "POST" else {}
 
@@ -144,17 +158,7 @@ async def run_rss(request) -> JSONResponse:
             )
             if not body.get("dry_run") and service.client.rename_requires_complete:
                 service.rename_all()
-            return [
-                {
-                    "title": item.episode.title,
-                    "group": item.episode.parsed.group if item.episode.parsed else "",
-                    "name": item.episode.parsed.title if item.episode.parsed else "",
-                    "episode": item.episode.parsed.episode if item.episode.parsed else "",
-                    "task_id": item.task.torrent_id if item.task else "",
-                    "skipped": item.skipped,
-                }
-                for item in results
-            ]
+            return [_rss_item(item) for item in results]
         finally:
             service.close()
 
@@ -300,6 +304,144 @@ async def kazumi_run(request) -> JSONResponse:
     return await _run(work)
 
 
+# -- jobs -----------------------------------------------------------------
+def _build_work(kind: str, params: dict):
+    if kind == "rss_run":
+
+        def work(emit, cancel):
+            service = DownloadService(_load_config())
+            try:
+                results = service.run(
+                    feed_names=params.get("feeds") or None,
+                    limit=params.get("limit"),
+                    dry_run=bool(params.get("dry_run")),
+                    rename=not params.get("no_rename"),
+                    on_event=emit,
+                )
+                if not params.get("dry_run") and service.client.rename_requires_complete:
+                    service.rename_all()
+                return [_rss_item(item) for item in results]
+            finally:
+                service.close()
+
+        return work
+
+    if kind == "kazumi_run":
+
+        def work(emit, cancel):
+            service = KazumiService(_load_config())
+            try:
+                return [
+                    asdict(result)
+                    for result in service.run(
+                        names=params.get("names") or None,
+                        dry_run=bool(params.get("dry_run")),
+                        limit=params.get("limit"),
+                        on_event=emit,
+                    )
+                ]
+            finally:
+                service.close()
+
+        return work
+
+    if kind == "kazumi_download":
+
+        def work(emit, cancel):
+            service = KazumiService(_load_config())
+            try:
+                return [
+                    asdict(result)
+                    for result in service.download(
+                        str(params.get("keyword") or ""),
+                        rule_name=params.get("rule") or None,
+                        hit_index=int(params.get("hit", 0)),
+                        road_index=int(params.get("road", 0)),
+                        episode=params.get("episode") or None,
+                        limit=params.get("limit"),
+                        quality=params.get("quality") or None,
+                        save_path=params.get("save_path") or None,
+                        dry_run=bool(params.get("dry_run")),
+                        sniffed_url=params.get("url") or None,
+                        on_event=emit,
+                    )
+                ]
+            finally:
+                service.close()
+
+        return work
+
+    if kind == "rename":
+
+        def work(emit, cancel):
+            emit({"type": "log", "message": "重命名已完成任务…"})
+            service = DownloadService(_load_config())
+            try:
+                return {"renamed": service.rename_all()}
+            finally:
+                service.close()
+
+        return work
+
+    raise AmineError(f"未知任务类型: {kind}")
+
+
+async def jobs_endpoint(request):
+    if request.method == "GET":
+        return JSONResponse([job.summary() for job in manager.list()])
+    body = await request.json()
+    kind = str(body.get("kind") or "")
+    params = body.get("params") or {}
+    try:
+        work = _build_work(kind, params)
+    except AmineError as exc:
+        return _error(str(exc))
+    job = manager.submit(kind, params, work)
+    return JSONResponse(job.summary())
+
+
+async def job_detail(request):
+    job = manager.get(request.path_params["id"])
+    if job is None:
+        return _error("任务不存在", 404)
+    data = job.summary()
+    data["events"] = job.events
+    return JSONResponse(data)
+
+
+async def job_cancel(request):
+    job = manager.get(request.path_params["id"])
+    if job is None:
+        return _error("任务不存在", 404)
+    job.cancel.set()
+    return JSONResponse({"ok": True})
+
+
+async def job_events(request):
+    job = manager.get(request.path_params["id"])
+    if job is None:
+        return _error("任务不存在", 404)
+
+    async def stream():
+        sent = 0
+        while True:
+            while sent < len(job.events):
+                event = job.events[sent]
+                sent += 1
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event.get("type") == "end":
+                    return
+            if job.status in ("done", "error", "cancelled") and sent >= len(job.events):
+                return
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # -- static ---------------------------------------------------------------
 async def spa(request):
     path = request.path_params.get("path", "")
@@ -331,6 +473,10 @@ routes = [
     Route("/api/kazumi/download", kazumi_download, methods=["POST"]),
     Route("/api/kazumi/subscriptions", kazumi_subscriptions),
     Route("/api/kazumi/run", kazumi_run, methods=["GET", "POST"]),
+    Route("/api/jobs", jobs_endpoint, methods=["GET", "POST"]),
+    Route("/api/jobs/{id}/events", job_events),
+    Route("/api/jobs/{id}/cancel", job_cancel, methods=["POST"]),
+    Route("/api/jobs/{id}", job_detail),
 ]
 
 if _DIST.exists():

@@ -395,7 +395,13 @@ cd web && bun run dev
 
 面板包含：**下载中**（进度 / 暂停 / 继续 / 移除）、**历史记录**（目标文件名 / 一键重命名）、
 **RSS 订阅**（预览 / 追番）、**解析下载**（导入规则 / 搜索 / 选集 / 下载 / 追番订阅）、
-**工具**（标题解析预览）。
+**任务**（后台任务 + 实时进度）、**工具**（标题解析预览）。
+
+耗时操作（追番、解析下载、重命名）会作为**后台任务**执行，界面通过 **SSE**
+（`/api/jobs/{id}/events`）实时显示进度与结果，不会阻塞：
+
+- `POST /api/jobs` `{kind, params}`，kind 为 `rss_run` / `kazumi_run` / `kazumi_download` / `rename`
+- `GET /api/jobs`、`GET /api/jobs/{id}`、`GET /api/jobs/{id}/events`（SSE）、`POST /api/jobs/{id}/cancel`
 
 > `serve` 默认只监听 `127.0.0.1`；局域网访问用 `--host 0.0.0.0`，注意别暴露到公网。
 

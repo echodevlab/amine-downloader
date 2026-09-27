@@ -78,6 +78,29 @@ export type Status = {
   kazumi_subscriptions: number
 }
 
+export type Job = {
+  id: string
+  kind: string
+  status: "pending" | "running" | "done" | "error" | "cancelled"
+  params: Record<string, unknown>
+  created_at: number
+  started_at: number | null
+  finished_at: number | null
+  error: string
+  result: unknown
+  event_count: number
+}
+
+export type JobEvent = {
+  type: string
+  t: number
+  message?: string
+  item?: Record<string, unknown>
+  status?: string
+  error?: string
+  result?: unknown
+}
+
 export type ParseResult = {
   parsed: {
     raw: string
@@ -155,4 +178,9 @@ export const api = {
   kazumiSubscriptions: () => request<KazumiSubscription[]>("/api/kazumi/subscriptions"),
   kazumiRun: (body: { names?: string[]; limit?: number | null; dry_run?: boolean }) =>
     request<KazumiResult[]>("/api/kazumi/run", { method: "POST", body: JSON.stringify(body) }),
+  createJob: (kind: string, params: Record<string, unknown>) =>
+    request<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ kind, params }) }),
+  jobs: () => request<Job[]>("/api/jobs"),
+  job: (id: string) => request<Job & { events: JobEvent[] }>(`/api/jobs/${id}`),
+  cancelJob: (id: string) => request<{ ok: boolean }>(`/api/jobs/${id}/cancel`, { method: "POST" }),
 }

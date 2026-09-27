@@ -3,6 +3,7 @@ import { Toaster } from "sonner"
 import {
   Download,
   History,
+  ListChecks,
   RefreshCw,
   Rss as RssIcon,
   Wand2,
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { api, type Status } from "@/lib/api"
 import Dashboard from "@/pages/Dashboard"
 import HistoryPage from "@/pages/History"
+import JobsPage from "@/pages/Jobs"
 import KazumiPage from "@/pages/Kazumi"
 import RssPage from "@/pages/Rss"
 import ToolsPage from "@/pages/Tools"
@@ -22,6 +24,7 @@ const NAV = [
   { key: "history", label: "历史记录", icon: History },
   { key: "rss", label: "RSS 订阅", icon: RssIcon },
   { key: "kazumi", label: "解析下载", icon: Wand2 },
+  { key: "jobs", label: "任务", icon: ListChecks },
   { key: "tools", label: "工具", icon: Wrench },
 ] as const
 
@@ -44,6 +47,8 @@ export default function App() {
   useEffect(() => {
     loadStatus()
   }, [])
+
+  const goToJobs = () => setPage("jobs")
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -88,8 +93,9 @@ export default function App() {
         <main className="min-w-0 flex-1">
           {page === "downloads" && <Dashboard />}
           {page === "history" && <HistoryPage />}
-          {page === "rss" && <RssPage />}
-          {page === "kazumi" && <KazumiPage />}
+          {page === "rss" && <RssPage onNavigate={goToJobs} />}
+          {page === "kazumi" && <KazumiPage onNavigate={goToJobs} />}
+          {page === "jobs" && <JobsPage />}
           {page === "tools" && <ToolsPage />}
         </main>
       </div>

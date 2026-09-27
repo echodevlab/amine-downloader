@@ -6,7 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ..config import AppConfig, KazumiSubscription, default_data_path, kazumi_rules_dir
@@ -168,13 +168,19 @@ class KazumiService:
         save_path: str | None = None,
         dry_run: bool = False,
         sniffed_url: str | None = None,
+        on_event=None,
     ) -> list[KazumiResult]:
+        def emit(event: dict) -> None:
+            if on_event is not None:
+                on_event(event)
+
         hits = self.search(keyword, rule_name=rule_name)
         if not hits:
             raise AmineError(f"没有搜索到: {keyword}")
         if hit_index >= len(hits):
             raise AmineError(f"搜索结果不足 {hit_index + 1} 条")
         hit = hits[hit_index]
+        emit({"type": "log", "message": f"匹配到作品: {hit.item.name}（{hit.rule.name}）"})
         roads = self.chapters(hit.rule, hit.item)
         if not roads:
             raise AmineError(f"没有解析到剧集: {hit.item.name}")
@@ -190,21 +196,22 @@ class KazumiService:
                 raise AmineError(f"未找到第 {episode} 集")
         if limit:
             episodes = episodes[:limit]
+        emit({"type": "log", "message": f"共 {len(episodes)} 集待处理"})
 
         quality = quality or self.preferred_quality
         results: list[KazumiResult] = []
         for index, ep in enumerate(episodes):
-            results.append(
-                self._download_episode(
-                    hit,
-                    ep,
-                    index,
-                    quality=quality,
-                    save_path=save_path,
-                    dry_run=dry_run,
-                    sniffed_url=sniffed_url,
-                )
+            result = self._download_episode(
+                hit,
+                ep,
+                index,
+                quality=quality,
+                save_path=save_path,
+                dry_run=dry_run,
+                sniffed_url=sniffed_url,
             )
+            results.append(result)
+            emit({"type": "item", "item": asdict(result)})
         return results
 
     # -- subscriptions ----------------------------------------------------
@@ -221,15 +228,24 @@ class KazumiService:
         names: list[str] | None = None,
         dry_run: bool = False,
         limit: int | None = None,
+        on_event=None,
     ) -> list[KazumiResult]:
         """Process every enabled Kazumi subscription, skipping seen episodes."""
 
+        def emit(event: dict) -> None:
+            if on_event is not None:
+                on_event(event)
+
         results: list[KazumiResult] = []
         for subscription in self.subscriptions(names):
+            emit({"type": "log", "message": f"订阅: {subscription.name}"})
             try:
-                results.extend(self._run_subscription(subscription, dry_run=dry_run, limit=limit))
+                items = self._run_subscription(subscription, dry_run=dry_run, limit=limit)
             except AmineError as exc:
-                results.append(KazumiResult(title=subscription.name, episode="", skipped=str(exc)))
+                items = [KazumiResult(title=subscription.name, episode="", skipped=str(exc))]
+            for item in items:
+                results.append(item)
+                emit({"type": "item", "item": asdict(item)})
         return results
 
     def _run_subscription(
