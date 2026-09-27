@@ -70,7 +70,7 @@ services:
     restart: unless-stopped
 
   amine-downloader:
-    image: ${AMINE_IMAGE:-ghcr.io/wenwen12345/amine-downloader:latest}
+    image: ${AMINE_IMAGE:-ghcr.io/echodevlab/amine-downloader:latest}
     container_name: amine-downloader
     environment:
       - TZ=Asia/Shanghai
