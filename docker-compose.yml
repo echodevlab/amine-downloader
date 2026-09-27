@@ -53,6 +53,7 @@ services:
     command:
       - "--conf-path=/config/aria2.conf"
       - "--rpc-secret=CHANGE_ME_RPC_SECRET" # ← 改成你的密钥，并同步到 amine 配置
+      - "--rpc-allow-origin-all=true" # AriaNg 跨源访问需要
       - "--dir=/wenwen/downloads"
       - "--state-dir=/var/lib/aria2-next"
       - "--listen-port=6881"
