@@ -55,6 +55,23 @@ def test_rule_store_roundtrip(tmp_path):
     assert store.get("missing") is None
 
 
+def test_import_index_skips_failures(tmp_path, monkeypatch):
+    from amine_downloader.errors import AmineError
+
+    store = RuleStore(tmp_path / "rules")
+    index = [{"name": "Good"}, {"name": "Bad"}]
+
+    def fake_download(url):
+        if url.endswith("Good.json"):
+            return json.dumps({**AGE_RULE, "name": "Good"}), "Good"
+        raise AmineError("boom")
+
+    monkeypatch.setattr(RuleStore, "_download", staticmethod(fake_download))
+    written = store._import_index("https://example.com/index.json", index)
+    assert [path.name for path in written] == ["Good.json"]
+    assert store.get("Good") is not None
+
+
 def test_rule_store_import_list(tmp_path):
     source = tmp_path / "bundle.json"
     source.write_text(json.dumps([AGE_RULE, {**AGE_RULE, "name": "Second"}]), encoding="utf-8")

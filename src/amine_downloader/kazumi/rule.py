@@ -281,21 +281,34 @@ class RuleStore:
     def _import_index(self, source: str, entries: list) -> list[Path]:
         base = source.rsplit("/", 1)[0]
         written: list[Path] = []
+        errors: list[str] = []
         for entry in entries:
             name = entry.get("name")
             if not name:
                 continue
             url = f"{base}/{name}.json"
-            payload, _ = self._download(url)
-            rule = KazumiRule.from_json(payload)
+            try:
+                payload, _ = self._download(url)
+                rule = KazumiRule.from_json(payload)
+            except AmineError as exc:
+                errors.append(f"{name}: {exc}")
+                continue  # 单条失败不影响其余
             written.append(self.save(rule, filename=rule.name or str(name)))
+        if not written and errors:
+            raise AmineError("全部规则导入失败: " + "; ".join(errors[:3]))
         return written
 
     @staticmethod
     def _download(url: str) -> tuple[str, str]:
-        try:
-            response = httpx.get(url, timeout=30.0, follow_redirects=True)
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise AmineError(f"下载规则失败 ({url}): {exc}") from exc
-        return response.text, Path(url.split("?")[0]).stem
+        import time
+
+        last: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = httpx.get(url, timeout=30.0, follow_redirects=True)
+                response.raise_for_status()
+                return response.text, Path(url.split("?")[0]).stem
+            except httpx.HTTPError as exc:
+                last = exc
+                time.sleep(0.5 * (attempt + 1))
+        raise AmineError(f"下载规则失败 ({url}): {last}")
