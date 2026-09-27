@@ -101,6 +101,14 @@ concurrency = 8
 # save_path = ""
 # enabled = true
 # title = ""                 # 覆盖解析出的番剧名（可选）
+
+# 媒体库：下载直接入库（Jellyfin 可直接识别）
+# [library]
+# enabled = true
+# root = "/wenwen/media/anime"          # 媒体库根目录（下载器侧路径）
+# local_root = "Z:/wenwen/media/anime"  # 同一目录在本机看到的路径（可选，用于磁盘重命名）
+# series_template = "{{title}}"           # 剧集文件夹名
+# season_template = "Season {{season}}"   # 季文件夹名
 '''
 
 
@@ -173,6 +181,7 @@ class AppConfig:
     rss: list[RssFeed] = field(default_factory=list)
     kazumi_subscriptions: list[KazumiSubscription] = field(default_factory=list)
     title_aliases: dict[str, str] = field(default_factory=dict)
+    library: dict = field(default_factory=dict)
     qbittorrent: dict = field(default_factory=dict)
     aria2: dict = field(default_factory=dict)
     kazumi: dict = field(default_factory=dict)
@@ -226,6 +235,7 @@ class AppConfig:
         aliases = data.get("titles") or {}
         if isinstance(aliases, dict):
             config.title_aliases = {str(key): str(value) for key, value in aliases.items()}
+        config.library = dict(data.get("library", {}))
         return config
 
 

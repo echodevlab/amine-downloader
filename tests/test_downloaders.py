@@ -99,10 +99,10 @@ def test_aria2_index_out():
     }
     torrent = encode({b"info": info})
 
-    def rename_fn(index, path, size):
-        return "new/" + path.rsplit("/", 1)[-1] if path.endswith(".mkv") else None
+    def plan(files):
+        return {index: "new/" + path.rsplit("/", 1)[-1] for index, path, _size in files if path.endswith(".mkv")}
 
-    assert Aria2Downloader._index_out(torrent, rename_fn) == ["1=new/01.mkv", "2=new/02.mkv"]
+    assert Aria2Downloader._index_out(torrent, plan) == ["1=new/01.mkv", "2=new/02.mkv"]
     assert Aria2Downloader._index_out(torrent, None) == []
 
 

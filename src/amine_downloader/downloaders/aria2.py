@@ -27,6 +27,7 @@ class Aria2Downloader(BaseDownloader):
         download_dir: str = "",
         *,
         local_dir: str = "",
+        path_map: list[tuple[str, str]] | None = None,
         timeout: float = 30.0,
     ) -> None:
         self.rpc_url = rpc_url
@@ -34,6 +35,10 @@ class Aria2Downloader(BaseDownloader):
         self.download_dir = download_dir
         #: Same directory as seen by this machine (mapped drive / UNC path).
         self.local_dir = local_dir
+        #: (server_prefix, local_prefix) pairs for translating paths.
+        self.path_map: list[tuple[str, str]] = list(path_map or [])
+        if download_dir and local_dir:
+            self.path_map.append((download_dir, local_dir))
         self._client = httpx.Client(timeout=timeout)
         self._counter = 0
         self._media_supported: bool | None = None
@@ -77,7 +82,7 @@ class Aria2Downloader(BaseDownloader):
         name: str | None = None,
         category: str | None = None,
         paused: bool = False,
-        rename_fn=None,
+        rename_plan=None,
     ) -> str:
         options: dict = {}
         directory = save_path or self.download_dir
@@ -97,7 +102,7 @@ class Aria2Downloader(BaseDownloader):
             torrent_bytes = self._download_torrent(source)
 
         if torrent_bytes:
-            index_out = self._index_out(torrent_bytes, rename_fn)
+            index_out = self._index_out(torrent_bytes, rename_plan)
             if index_out:
                 options["index-out"] = index_out
             result = self._call(
@@ -113,19 +118,20 @@ class Aria2Downloader(BaseDownloader):
         return str(result)
 
     @staticmethod
-    def _index_out(torrent_bytes: bytes, rename_fn) -> list[str]:
+    def _index_out(torrent_bytes: bytes, rename_plan) -> list[str]:
         """Build aria2 ``index-out`` entries from a torrent's file list."""
 
-        if rename_fn is None:
+        if rename_plan is None:
             return []
         try:
             files = torrent_files(torrent_bytes)
         except BencodeError:
             return []
+        entries_input = [(index, path, size) for index, (path, size) in enumerate(files)]
+        plan = rename_plan(entries_input)
         entries: list[str] = []
-        for index, (path, size) in enumerate(files):
-            new_path = rename_fn(index, path, size)
-            if new_path and new_path != path:
+        for index, new_path in plan.items():
+            if new_path and new_path != files[index][0]:
                 # aria2's index-out uses 1-based indices (as shown by --show-files).
                 entries.append(f"{index + 1}={new_path}")
         return entries
@@ -371,14 +377,17 @@ class Aria2Downloader(BaseDownloader):
     def _local_target(self, path: str) -> Path:
         """Translate an aria2-side path to the path this machine can access."""
 
-        if self.local_dir and self.download_dir and path:
-            server = self._norm(self.download_dir)
+        if path:
             current = self._norm(path)
-            if current == server:
-                return Path(self.local_dir)
-            if current.startswith(server + "/"):
-                relative = current[len(server) + 1 :]
-                return Path(self.local_dir) / relative
+            for server, local in self.path_map:
+                server_norm = self._norm(str(server))
+                if not server_norm:
+                    continue
+                if current == server_norm:
+                    return Path(local)
+                if current.startswith(server_norm + "/"):
+                    relative = current[len(server_norm) + 1 :]
+                    return Path(local) / relative
         return Path(path)
 
     def _local_path(self, path: str) -> Path | None:

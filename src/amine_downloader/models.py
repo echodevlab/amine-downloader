@@ -24,6 +24,10 @@ VIDEO_EXTENSIONS: frozenset[str] = frozenset(
     }
 )
 
+SUBTITLE_EXTENSIONS: frozenset[str] = frozenset(
+    {".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup", ".smi"}
+)
+
 
 @dataclass(slots=True)
 class ParsedTitle:

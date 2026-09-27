@@ -517,20 +517,31 @@ uv run pytest
 
 ## Jellyfin 兼容性
 
-**当前状态：文件名兼容，目录结构还不完整。**
+开启 `[library]` 后，下载**直接落到媒体库结构**，Jellyfin 可直接识别：
 
-- ✅ 文件名形如 `... S01E05 ...`，Jellyfin 能识别季/集；配合 `episode_offset` 可校正字幕组集数偏差。
-- ✅ 可用 `[titles]` / `title` 把番剧名统一成 Jellyfin 能匹配的名称。
-- ⚠️ **没有按剧集的规范文件夹**：BT 种子保留原始文件夹名（如 `[Lilith-Raws] 葬送的芙莉莲 - 05 [1080p]`），
-  直链 / HLS 则直接落在下载目录里，Jellyfin 取系列名会出错。
-- ⚠️ **没有自动入库**：下载目录不是媒体库目录，也没有 `Season 01/` 结构或 `.nfo`。
+```
+{root}/{剧集}/{季}/{标准文件名}.ext
+# 例：/wenwen/media/anime/葬送的芙莉莲/Season 01/葬送的芙莉莲 S01E01 [1080p].mkv
+```
 
-建议：
+```toml
+[library]
+enabled = true
+root = "/wenwen/media/anime"          # 媒体库根目录（下载器侧路径）
+local_root = "Z:/wenwen/media/anime"  # 同一目录在本机看到的路径（可选，用于磁力磁盘重命名）
+series_template = "{title}"           # 剧集文件夹名
+season_template = "Season {season}"   # 季文件夹名
+```
 
-1. 用 `[titles]` / `title` 统一番剧名；
-2. Jellyfin 媒体库指向**专门的媒体目录**，而不是下载目录；
-3. 需要完整自动入库（`剧名 (年份)/Season 01/剧名 S01E01.mkv`、可选 `.nfo`）时，需要一个
-   「整理入库」步骤——目前**尚未实现**。
+- 文件名始终是 `... SxxExx ...`，Jellyfin 能识别季/集；`episode_offset` 可校正字幕组集数偏差。
+- 用 `[titles]` / `title` 把番剧名统一成 Jellyfin 能匹配的名称。
+- **字幕**：当种子只有一个视频时，外挂字幕会改成与视频同名（`... S01E01 [1080p].zh.srt`），
+  Jellyfin 能自动挂载。
+- 不同下载器的实现：
+  - **aria2**：`dir` = `{root}/{剧集}/{季}`，用 `index-out` 把文件平铺进去，路径完全可控（远程可用）。
+  - **qBittorrent**：`savepath` = `{root}/{剧集}`，文件平铺到种子根目录后，把种子文件夹重命名为 `Season 01`。
+
+> 关闭 `[library].enabled` 时，文件仍按 `rename_template` 重命名，但保持原下载目录结构。
 
 ## 已知限制
 

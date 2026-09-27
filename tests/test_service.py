@@ -13,14 +13,14 @@ class FakeDownloader(BaseDownloader):
         self.files = files
         self.added: list[tuple[str, dict]] = []
         self.renames: list[tuple[str, str]] = []
-        self.rename_fn = None
+        self.rename_plan = None
 
     def test_connection(self) -> str:
         return "fake"
 
-    def add(self, source, *, save_path=None, name=None, category=None, paused=False, rename_fn=None) -> str:
+    def add(self, source, *, save_path=None, name=None, category=None, paused=False, rename_plan=None) -> str:
         self.added.append((source, {"save_path": save_path, "category": category}))
-        self.rename_fn = rename_fn
+        self.rename_plan = rename_plan
         return "hash1"
 
     def get(self, torrent_id):
@@ -141,12 +141,43 @@ def test_resolve_title_alias_and_override(tmp_path):
     assert task.title == "手动名"
 
 
-def test_build_rename_fn(tmp_path):
+def test_library_target(tmp_path):
+    files = [TorrentFile(path="Torrent/Sintel.mp4", size=1, progress=1.0)]
+    service, client, _ = build_service(tmp_path, files)
+    service.config.library = {"enabled": True, "root": "/media/anime"}
+    parsed = parse_title("[Group] Sintel the Movie - 01 [1080p]")
+    # qBittorrent: series folder + season folder to rename into
+    assert service.library_target(parsed) == ("/media/anime/Sintel the Movie", "Season 01")
+
+    config = AppConfig()
+    config.library = {"enabled": True, "root": "/media/anime"}
+    aria2_client = FakeAria2Client([])
+    aria2_service = DownloadService(config, client=aria2_client, store=Store(tmp_path / "a.db"))
+    # aria2: season folder is the download dir directly
+    assert aria2_service.library_target(parsed) == ("/media/anime/Sintel the Movie/Season 01", "")
+
+
+def test_add_torrent_library_save_path_and_flatten(tmp_path):
+    files = [TorrentFile(path="Torrent/Sintel.mp4", size=1, progress=1.0)]
+    service, client, _ = build_service(tmp_path, files)
+    service.config.library = {"enabled": True, "root": "/media/anime"}
+    task = service.add_torrent("magnet:?xt=urn:btih:abc", raw_title="[Group] Sintel the Movie - 01 [1080p]")
+    assert task.save_path == "/media/anime/Sintel the Movie"
+    assert client.rename_plan is not None
+    assert client.rename_plan([(0, "Torrent/Sintel.mp4", 1)]) == {
+        0: "[Group] Sintel the Movie S01E01 [1080p].mp4"
+    }
+
+
+def test_build_rename_plan(tmp_path):
     service, _, _ = build_service(tmp_path, [])
     parsed = parse_title("[Group] Sintel the Movie - 01 [1080p]")
-    rename_fn = service._build_rename_fn(parsed)
-    assert rename_fn(5, "Sintel/Sintel.mp4", 100) == "Sintel/[Group] Sintel the Movie S01E01 [1080p].mp4"
-    assert rename_fn(0, "Sintel/Sintel.en.srt", 10) is None
+    plan = service._build_rename_plan(parsed)(
+        [(5, "Sintel/Sintel.mp4", 100), (0, "Sintel/Sintel.en.srt", 10)]
+    )
+    assert plan[5] == "Sintel/[Group] Sintel the Movie S01E01 [1080p].mp4"
+    # single video -> subtitle renamed to match it
+    assert plan[0] == "Sintel/[Group] Sintel the Movie S01E01 [1080p].en.srt"
 
 
 def test_episode_offset(tmp_path):

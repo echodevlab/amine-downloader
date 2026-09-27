@@ -13,6 +13,7 @@ from amine_downloader.store import Store
 class FakeAria2:
     def __init__(self):
         self.calls: list[tuple[str, str]] = []
+        self.dirs: list[str | None] = []
         self.counter = 0
 
     def add_uri(self, uri, *, out=None, save_path=None, options=None):
@@ -21,6 +22,7 @@ class FakeAria2:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(f"SEG:{uri}".encode())
         self.calls.append((uri, out))
+        self.dirs.append(save_path)
         return f"gid{self.counter}"
 
     def wait_for(self, gids, *, timeout=600.0, poll=1.0):
@@ -45,6 +47,7 @@ class FakeNativeAria2(FakeAria2):
 
     def add_media(self, uri, *, out=None, save_path=None, quality="", media_format="mp4", timeout=60.0):
         self.calls.append((uri, out))
+        self.dirs.append(save_path)
         return "native-gid"
 
 
@@ -150,6 +153,33 @@ def test_title_override_changes_filename(tmp_path):
     assert result.title == "自定义番剧名"
     assert result.output == "自定义番剧名 S01E01.mp4"
     assert fake.calls == [("https://cdn.test/movie.mp4", "自定义番剧名 S01E01.mp4")]
+
+
+def test_kazumi_library_path_and_download_dir(tmp_path):
+    fake = FakeAria2()
+    service = build_service(tmp_path, fake)
+    service.config.library = {"enabled": True, "root": "/media/anime"}
+    parsed = ParsedTitle(raw="x", title="葬送的芙莉莲", season=1, episode="1")
+    assert service.library_path(parsed) == "/media/anime/葬送的芙莉莲/Season 01"
+    assert service.target_path(parsed) == "/media/anime/葬送的芙莉莲/Season 01"
+
+    native = FakeNativeAria2()
+    service2 = build_service(tmp_path, native)
+    service2.config.library = {"enabled": True, "root": str(tmp_path / "lib")}
+    hit = make_hit()
+    from amine_downloader.kazumi.client import Episode
+
+    result = service2._download_episode(
+        hit,
+        Episode(name="第1集", page_url="https://site.test/play/1"),
+        0,
+        quality="",
+        save_path=None,
+        dry_run=False,
+        sniffed_url="https://cdn.test/movie.mp4",
+    )
+    assert result.ok
+    assert "Season 01" in str(native.dirs[-1])
 
 
 def test_dry_run_does_not_touch_aria2(tmp_path):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 import shutil
 import subprocess
@@ -100,6 +101,24 @@ class KazumiService:
             if candidate:
                 return str(candidate)
         return None
+
+    def library_path(self, parsed: ParsedTitle) -> str | None:
+        """Season folder inside the media library, or ``None`` when disabled."""
+
+        library = self.config.library or {}
+        if not library.get("enabled"):
+            return None
+        root = str(library.get("root") or "").strip()
+        if not root:
+            return None
+        series = render(parsed, str(library.get("series_template") or "{title}")) or parsed.title
+        season = render(parsed, str(library.get("season_template") or "Season {season}"))
+        if not season:
+            season = f"Season {parsed.season:02d}"
+        return posixpath.join(root, series, season)
+
+    def target_path(self, parsed: ParsedTitle, override: str | None = None) -> str | None:
+        return override or self.library_path(parsed) or self.save_path()
 
     def close(self) -> None:
         if self._sniffer is not None:
@@ -343,7 +362,7 @@ class KazumiService:
             ext = Path(stream_url.split("?")[0]).suffix or ".mp4"
             filename = render(parsed, self.rename_template, ext=ext)
             try:
-                gid = self.aria2.add_uri(stream_url, out=filename, save_path=save_path or self.save_path())
+                gid = self.aria2.add_uri(stream_url, out=filename, save_path=self.target_path(parsed, save_path))
             except AmineError as exc:
                 return KazumiResult(title=title, episode=number, stream_url=stream_url, kind=kind, skipped=str(exc))
             self._record(hit, parsed, stream_url, gid, filename, key)
@@ -404,7 +423,7 @@ class KazumiService:
             gid = self.aria2.add_media(
                 stream_url,
                 out=out_base,
-                save_path=self.save_path(save_path),
+                save_path=self.target_path(parsed, save_path),
                 quality=quality,
             )
         except AmineError as exc:
@@ -428,7 +447,7 @@ class KazumiService:
         key: str | None = None,
     ) -> KazumiResult:
         playlist = fetch_playlist(stream_url, preferred=quality)
-        target_dir = Path(self.save_path(save_path) or ".")
+        target_dir = Path(self.target_path(parsed, save_path) or ".")
         ffmpeg = self._ffmpeg_path()
 
         if playlist.encrypted:

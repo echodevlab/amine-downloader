@@ -9,9 +9,9 @@ from pathlib import Path
 from ..errors import AmineError
 from ..models import TorrentInfo
 
-#: Called with (file_index, original_path, size) for each file in a torrent.
-#: Return the desired relative path (using ``/``) or ``None`` to leave it as is.
-RenameFn = Callable[[int, str, int], "str | None"]
+#: Called with the full file list ``[(index, path, size), ...]``; returns a
+#: mapping of file index to the desired relative path (using ``/``).
+RenamePlan = Callable[[list[tuple[int, str, int]]], dict[int, str]]
 
 
 class DownloadError(AmineError):
@@ -54,11 +54,11 @@ class BaseDownloader(ABC):
         name: str | None = None,
         category: str | None = None,
         paused: bool = False,
-        rename_fn: RenameFn | None = None,
+        rename_plan: RenamePlan | None = None,
     ) -> str:
         """Add a torrent/url and return its client id (hash or gid).
 
-        ``rename_fn`` lets a client that supports pre-naming (aria2's
+        ``rename_plan`` lets a client that supports pre-naming (aria2's
         ``index-out``) rename files at add time.
         """
 

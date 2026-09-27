@@ -101,7 +101,7 @@ class QBittorrentDownloader(BaseDownloader):
         name: str | None = None,
         category: str | None = None,
         paused: bool = False,
-        rename_fn=None,
+        rename_plan=None,
     ) -> str:
         data: dict[str, str] = {}
         files = None

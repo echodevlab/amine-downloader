@@ -37,10 +37,15 @@ def create_downloader(config) -> BaseDownloader:
         rpc_url = settings.get("rpc_url")
         if not rpc_url:
             raise DownloadError("未配置 aria2.rpc_url")
+        path_map: list[tuple[str, str]] = []
+        library = config.library or {}
+        if library.get("enabled") and library.get("root") and library.get("local_root"):
+            path_map.append((str(library["root"]), str(library["local_root"])))
         return Aria2Downloader(
             rpc_url=str(rpc_url),
             secret=str(settings.get("secret", "")),
             download_dir=str(settings.get("download_dir", "")),
             local_dir=str(settings.get("local_dir", "")),
+            path_map=path_map,
         )
     raise DownloadError(f"未知的下载器: {config.downloader!r}（可选 qbittorrent / aria2）")
