@@ -20,6 +20,7 @@
 - **双下载器**：qBittorrent 通过 WebUI API 在服务端重命名；aria2 通过 JSON-RPC 下载并在完成后于本地重命名。
 - **Kazumi 规则解析下载**：兼容 Kazumi 规则仓库的 JSON（XPath 规则与 API/JSONPath 规则），
   用 CloakBrowser（隐身 Chromium）嗅探播放页的视频流，aria2 分片下载 `m3u8` 后合并、重命名。
+- **Web UI**：React + Vite + Tailwind v4 + shadcn/ui，提供下载中 / 历史记录 / RSS 订阅 / 解析下载 / 工具 面板。
 - **零重依赖**：核心仅依赖 `httpx`；解析下载额外用到 `lxml` 与 `cloakbrowser`。
 
 ## 安装
@@ -183,6 +184,7 @@ amine-downloader parse "[Lilith-Raws] 葬送的芙莉莲 - 05 [1080p][Baha][WEB-
 | `kazumi chapters KEYWORD [--rule R] [--hit N] [--json]` | 查看播放线路与剧集 |
 | `kazumi download KEYWORD [--rule R] [--road N] [--episode N] [--quality Q] [--url U] [--dry-run]` | 解析并下载（交给 aria2） |
 | `kazumi run [NAME...] [--limit N] [--dry-run]` | 按 `[[kazumi.subscribe]]` 批量追番（自动跳过已下载） |
+| `serve [--host H] [--port P]` | 启动 Web UI（React + shadcn） |
 
 全局参数 `--config PATH` 可指定配置文件。顶层 `run` 会同时处理 RSS 订阅与 Kazumi 解析订阅
 （用 `--no-kazumi` 可跳过解析部分）。
@@ -367,6 +369,36 @@ quality = "1080p"
 - 站点结构与反爬策略随时可能变化，规则失效时请更新规则或改用 BT/RSS 方式。
 - 请遵守当地法律法规与站点条款，仅将本工具用于个人合法用途。
 
+## Web UI
+
+前端在 `web/`（React + Vite + TypeScript + Tailwind v4 + shadcn/ui），用 **bun** 管理；
+后端是内置的 Starlette 服务，复用同一套服务层。
+
+```bash
+# 1. 构建前端（只需一次，或前端改动后）
+cd web
+bun install
+bun run build
+
+# 2. 启动（默认 http://127.0.0.1:8420）
+uv run amine-downloader serve
+```
+
+开发模式（前端热更新）：
+
+```bash
+# 终端 A：后端
+uv run amine-downloader serve --port 8420
+# 终端 B：前端（/api 会代理到 8420）
+cd web && bun run dev
+```
+
+面板包含：**下载中**（进度 / 暂停 / 继续 / 移除）、**历史记录**（目标文件名 / 一键重命名）、
+**RSS 订阅**（预览 / 追番）、**解析下载**（导入规则 / 搜索 / 选集 / 下载 / 追番订阅）、
+**工具**（标题解析预览）。
+
+> `serve` 默认只监听 `127.0.0.1`；局域网访问用 `--host 0.0.0.0`，注意别暴露到公网。
+
 ## 工作原理
 
 ```
@@ -409,6 +441,7 @@ src/amine_downloader/
 ├── service.py        # 订阅 → 下载 → 重命名 编排
 ├── models.py         # 数据模型
 ├── errors.py         # 统一异常
+├── server.py         # Web UI 的 JSON API 与静态托管
 ├── downloaders/
 │   ├── base.py       # 下载器抽象
 │   ├── qbittorrent.py

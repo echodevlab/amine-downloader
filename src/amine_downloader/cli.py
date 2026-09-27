@@ -285,6 +285,13 @@ def cmd_remove(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    from .server import serve
+
+    serve(host=args.host, port=args.port, config_path=args.config)
+    return 0
+
+
 # -- kazumi commands ------------------------------------------------------
 def _load_kazumi(args) -> KazumiService:
     config = AppConfig.load(args.config)
@@ -511,6 +518,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_remove.add_argument("id", help="torrent id / gid")
     p_remove.add_argument("--delete-files", action="store_true", help="同时删除文件")
     p_remove.set_defaults(func=cmd_remove)
+
+    p_serve = sub.add_parser("serve", help="启动 Web UI（React + shadcn）")
+    p_serve.add_argument("--host", default="127.0.0.1", help="监听地址")
+    p_serve.add_argument("--port", type=int, default=8420, help="监听端口")
+    p_serve.set_defaults(func=cmd_serve)
 
     p_kazumi = sub.add_parser("kazumi", help="Kazumi 规则解析下载（m3u8 / mp4）")
     kazumi_sub = p_kazumi.add_subparsers(dest="kazumi_command", required=True)
