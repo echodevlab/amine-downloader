@@ -20,7 +20,8 @@
 - **双下载器**：qBittorrent 通过 WebUI API 在服务端重命名；aria2 通过 JSON-RPC 下载并在完成后于本地重命名。
 - **Kazumi 规则解析下载**：兼容 Kazumi 规则仓库的 JSON（XPath 规则与 API/JSONPath 规则），
   用 CloakBrowser（隐身 Chromium）嗅探播放页的视频流，aria2 分片下载 `m3u8` 后合并、重命名。
-- **Web UI**：React + Vite + Tailwind v4 + shadcn/ui，提供下载中 / 历史记录 / RSS 订阅 / 解析下载 / 工具 面板。
+- **Web UI**：React + Vite + Tailwind v4 + shadcn/ui，提供下载中 / 历史记录 / RSS 订阅 / 解析下载 / 任务 / 工具 面板。
+- **Docker**：提供 GHCR 镜像，一条命令即可跑起 Web UI 与后台服务。
 - **零重依赖**：核心仅依赖 `httpx`；解析下载额外用到 `lxml` 与 `cloakbrowser`。
 
 ## 安装
@@ -440,6 +441,38 @@ cd web && bun run dev
 - `GET /api/jobs`、`GET /api/jobs/{id}`、`GET /api/jobs/{id}/events`（SSE）、`POST /api/jobs/{id}/cancel`
 
 > `serve` 默认只监听 `127.0.0.1`；局域网访问用 `--host 0.0.0.0`，注意别暴露到公网。
+
+## Docker
+
+镜像发布在 GHCR：`ghcr.io/<owner>/amine-downloader`（推送 `main` 或 `v*` tag 时由
+`.github/workflows/docker.yml` 自动构建）。
+
+```bash
+# 1. 生成默认配置到 ./config/config.toml
+docker run --rm -v "$PWD/config:/config" ghcr.io/<owner>/amine-downloader:latest init
+
+# 2. 编辑 ./config/config.toml，填入下载器地址与订阅
+
+# 3. 启动（Web UI 在 http://<host>:8420）
+docker run -d --name amine-downloader \
+  -p 8420:8420 \
+  -v "$PWD/config:/config" \
+  --restart unless-stopped \
+  ghcr.io/<owner>/amine-downloader:latest
+```
+
+- `/config` 卷保存配置、SQLite、Kazumi 规则和 CloakBrowser 缓存。
+- 下载器（qBittorrent / aria2）在其它容器或主机时，配置里写它们的地址即可。
+- 指定别的配置文件：`-e AMINE_DOWNLOADER_CONFIG=/config/other.toml`。
+
+本地构建：
+
+```bash
+docker build -t amine-downloader .
+```
+
+> 镜像内**未安装 Chromium 的系统依赖**，所以容器内做 Kazumi 视频嗅探还需要额外装依赖
+> （或用本机/另一容器跑嗅探）。BT/RSS、aria2/qB 下载、Web UI 都不受影响。
 
 ## 工作原理
 

@@ -1,0 +1,26 @@
+# 版本控制 / 本地数据
+.git
+.gitignore
+.local/
+.smoke/
+.smoke*/
+pytest-of-*/
+*.db
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 前端（在镜像内重新构建）
+web/node_modules/
+web/dist/
+web/.vite/
+
+# 文档 / 编辑器
+.vscode/
+.idea/
+.DS_Store

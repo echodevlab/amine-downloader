@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,7 +24,26 @@ from .renamer import render
 from .service import DownloadService
 
 _CONFIG_PATH: str | None = None
-_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+
+
+def _find_dist() -> Path:
+    """Locate the built frontend (works in the repo and inside the Docker image)."""
+
+    candidates: list[Path] = []
+    override = os.environ.get("AMINE_DOWNLOADER_WEB_DIR")
+    if override:
+        candidates.append(Path(override))
+    here = Path(__file__).resolve()
+    candidates.append(here.parents[2] / "web" / "dist")  # repo / editable install
+    candidates.append(here.parents[1] / "web" / "dist")  # installed next to package
+    candidates.append(Path.cwd() / "web" / "dist")
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
+
+
+_DIST = _find_dist()
 
 
 def configure(config_path: str | None) -> None:
