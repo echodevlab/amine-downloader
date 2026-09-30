@@ -70,6 +70,21 @@ class RssEpisode:
     def dedup_key(self) -> str:
         return self.guid or self.torrent_url or self.title
 
+    @property
+    def episode_key(self) -> str:
+        """Key that groups every release of the same episode.
+
+        Used by ``one_per_episode`` to avoid downloading several groups /
+        resolutions of the same episode.  Falls back to :attr:`dedup_key`
+        when the title has no episode number.
+        """
+
+        parsed = self.parsed
+        if parsed is None or not parsed.episode:
+            return self.dedup_key
+        title = (parsed.title or self.title).strip().lower()
+        return f"{title}|{parsed.season}|{parsed.episode}"
+
 
 @dataclass(slots=True)
 class TorrentFile:

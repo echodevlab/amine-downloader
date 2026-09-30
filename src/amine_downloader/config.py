@@ -3,14 +3,28 @@
 from __future__ import annotations
 
 import os
-import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .errors import AmineError
 from .renamer import DEFAULT_TEMPLATE
 
 APP_NAME = "amine-downloader"
+
+
+def ensure_dir(path: Path) -> Path:
+    """Create *path* (and parents), raising a helpful error if not writable."""
+
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise AmineError(
+            f"无法创建目录 {path}：{exc}\n"
+            "该位置不可写，请改用可写目录，例如设置环境变量：\n"
+            '  AMINE_DOWNLOADER_CONFIG_DIR="D:\\amine-downloader"'
+        ) from exc
+    return path
 
 DEFAULT_CONFIG_TEXT = f'''# amine-downloader configuration
 # See README.md for the full documentation.
@@ -34,6 +48,14 @@ category = "amine"
 episode_offset = 0
 # Only download these resolutions (empty means all). Example: ["1080p", "2160p"]
 resolution_preference = []
+# 内置调度器间隔（分钟，0 = 关闭）。定时运行 RSS / 解析订阅，并重命名已完成任务。
+interval = 30
+# Web UI 访问密码（留空 = 不鉴权）。启用后浏览器会弹出 Basic Auth 登录框。
+web_password = ""
+
+# 下载器路径 -> 本机路径映射（可选）。用于 aria2 与本机路径不一致时
+# （Docker / 映射盘 / UNC）。示例：path_map = [["/downloads", "Z:/downloads"]]
+# path_map = []
 
 [qbittorrent]
 url = "http://127.0.0.1:8080"
@@ -60,8 +82,12 @@ local_dir = ""
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
 # title = "葬送的芙莉莲"   # 覆盖解析出的番剧名（可选，用于 Jellyfin 匹配等）
-# groups = ["Lilith-Raws", "ANi"]   # 只下这些字幕组（可选，子串匹配）
-# exclude_groups = ["某字幕组"]      # 排除这些字幕组（可选）
+# names = ["葬送的芙莉莲"]           # 只下番剧名匹配这些关键词的条目（可选，子串匹配）
+# exclude_names = ["某番剧"]         # 排除番剧名匹配这些关键词的条目（可选）
+# one_per_episode = true            # 同一集只保留一个版本（默认 true）
+# initial = "latest"                # 首次运行：latest 只下最新一集 / all 全部 / none 只标记已见
+# season = 2                        # 覆盖季号（可选）
+# episode_offset = 12               # 覆盖全局集数偏移（可选）
 
 # 标题别名：把解析出的标题映射为固定名称（可选）
 # [titles]
@@ -99,12 +125,16 @@ concurrency = 8
 # [[kazumi.subscribe]]
 # name = "葬送的芙莉莲"       # 搜索关键词
 # rule = "AGE"               # 规则名称（省略则在只有一条规则时自动选择）
+# source = ""                # 已解析的作品地址（设置后跳过搜索，推荐由 Web 添加时自动写入）
 # hit = 0                    # 取第几个搜索结果
 # road = 0                   # 取第几条播放线路
 # quality = "1080p"
 # save_path = ""
 # enabled = true
 # title = ""                 # 覆盖解析出的番剧名（可选）
+# initial = "latest"         # 首次运行：latest / all / none
+# season = 2                 # 覆盖季号（可选）
+# episode_offset = 12        # 覆盖全局集数偏移（可选）
 
 # 媒体库：下载直接入库（Jellyfin 可直接识别）
 # [library]
@@ -117,17 +147,16 @@ concurrency = 8
 
 
 def config_dir() -> Path:
+    """Directory for config.toml / data.db.
+
+    Defaults to the **current working directory** (so running from the repo
+    keeps everything local). Override with ``AMINE_DOWNLOADER_CONFIG_DIR``.
+    """
+
     override = os.environ.get("AMINE_DOWNLOADER_CONFIG_DIR")
     if override:
         return Path(override).expanduser()
-    if sys.platform == "win32":
-        base = os.environ.get("APPDATA")
-        if base:
-            return Path(base) / APP_NAME
-    base = os.environ.get("XDG_CONFIG_HOME")
-    if base:
-        return Path(base) / APP_NAME
-    return Path.home() / ".config" / APP_NAME
+    return Path.cwd()
 
 
 def default_config_path() -> Path:
@@ -153,28 +182,59 @@ def kazumi_rules_dir(config: "AppConfig | None" = None) -> Path:
     return config_dir() / "kazumi-rules"
 
 
+#: 首次运行订阅时的行为：latest=只下最新一集，all=全部，none=只标记为已见。
+INITIAL_CHOICES = ("latest", "all", "none")
+
+
+def _as_initial(value, default: str = "latest") -> str:
+    text = str(value or default).strip().lower()
+    return text if text in INITIAL_CHOICES else default
+
+
+def _optional_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(slots=True)
 class RssFeed:
     name: str
     url: str
     enabled: bool = True
     title: str = ""
-    #: 只保留这些字幕组（留空 = 全部）；大小写不敏感的子串匹配
-    groups: list[str] = field(default_factory=list)
-    #: 排除这些字幕组
-    exclude_groups: list[str] = field(default_factory=list)
+    #: 只保留解析出的番剧名匹配这些关键词的条目（留空 = 全部）；大小写不敏感的子串匹配
+    names: list[str] = field(default_factory=list)
+    #: 排除解析出的番剧名匹配这些关键词的条目
+    exclude_names: list[str] = field(default_factory=list)
+    #: 同一集只保留一个版本（按字幕组 → 分辨率 → 发布时间选择）
+    one_per_episode: bool = True
+    #: 首次运行策略：latest / all / none
+    initial: str = "latest"
+    #: 覆盖全局的季号 / 集数偏移
+    season: int | None = None
+    episode_offset: int | None = None
 
 
 @dataclass(slots=True)
 class KazumiSubscription:
     name: str
     rule: str = ""
+    #: 已解析作品地址；设置后跳过搜索，直接用它拉剧集
+    source: str = ""
     hit: int = 0
     road: int = 0
     quality: str = ""
     save_path: str = ""
     enabled: bool = True
     title: str = ""
+    #: 首次运行策略：latest / all / none
+    initial: str = "latest"
+    season: int | None = None
+    episode_offset: int | None = None
 
 
 @dataclass(slots=True)
@@ -186,6 +246,12 @@ class AppConfig:
     category: str = "amine"
     episode_offset: int = 0
     resolution_preference: list[str] = field(default_factory=list)
+    #: 内置调度器间隔（分钟，0 = 关闭）
+    interval: int = 30
+    #: Web UI 访问密码（留空 = 不鉴权）
+    web_password: str = ""
+    #: 下载器路径 -> 本机路径的映射
+    path_map: list[tuple[str, str]] = field(default_factory=list)
     rss: list[RssFeed] = field(default_factory=list)
     kazumi_subscriptions: list[KazumiSubscription] = field(default_factory=list)
     title_aliases: dict[str, str] = field(default_factory=dict)
@@ -211,6 +277,11 @@ class AppConfig:
         config.category = str(app.get("category", config.category))
         config.episode_offset = int(app.get("episode_offset", config.episode_offset))
         config.resolution_preference = list(app.get("resolution_preference", []))
+        config.interval = int(app.get("interval", config.interval))
+        config.web_password = str(app.get("web_password", config.web_password))
+        for entry in data.get("path_map", []) or []:
+            if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                config.path_map.append((str(entry[0]), str(entry[1])))
         for entry in data.get("rss", []):
             if not entry.get("url"):
                 continue
@@ -220,8 +291,12 @@ class AppConfig:
                     url=str(entry["url"]),
                     enabled=bool(entry.get("enabled", True)),
                     title=str(entry.get("title", "")),
-                    groups=[str(item) for item in entry.get("groups", []) or []],
-                    exclude_groups=[str(item) for item in entry.get("exclude_groups", []) or []],
+                    names=[str(item) for item in entry.get("names", []) or []],
+                    exclude_names=[str(item) for item in entry.get("exclude_names", []) or []],
+                    one_per_episode=bool(entry.get("one_per_episode", True)),
+                    initial=_as_initial(entry.get("initial")),
+                    season=_optional_int(entry.get("season")),
+                    episode_offset=_optional_int(entry.get("episode_offset")),
                 )
             )
         config.qbittorrent = dict(data.get("qbittorrent", {}))
@@ -234,12 +309,16 @@ class AppConfig:
                 KazumiSubscription(
                     name=str(entry["name"]),
                     rule=str(entry.get("rule", "")),
+                    source=str(entry.get("source", "")),
                     hit=int(entry.get("hit", 0)),
                     road=int(entry.get("road", 0)),
                     quality=str(entry.get("quality", "")),
                     save_path=str(entry.get("save_path", "")),
                     enabled=bool(entry.get("enabled", True)),
                     title=str(entry.get("title", "")),
+                    initial=_as_initial(entry.get("initial")),
+                    season=_optional_int(entry.get("season")),
+                    episode_offset=_optional_int(entry.get("episode_offset")),
                 )
             )
         aliases = data.get("titles") or {}
@@ -253,6 +332,6 @@ def write_default_config(path: Path | str | None = None, *, overwrite: bool = Fa
     target = Path(path).expanduser() if path else default_config_path()
     if target.exists() and not overwrite:
         raise FileExistsError(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(target.parent)
     target.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
     return target

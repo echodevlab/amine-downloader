@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .config import AppConfig, default_data_path
 from .downloaders import BaseDownloader, create_downloader
+from .downloaders.base import source_kind
 from .models import SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS, DownloadTask, ParsedTitle, RssEpisode
 from .parser import parse_title
 from .renamer import render
@@ -43,8 +44,9 @@ class DownloadService:
         self.store = store or Store(default_data_path())
 
     # -- parsing / naming -------------------------------------------------
-    def apply_offset(self, parsed: ParsedTitle) -> ParsedTitle:
-        offset = self.config.episode_offset
+    def apply_offset(self, parsed: ParsedTitle, offset: int | None = None) -> ParsedTitle:
+        if offset is None:
+            offset = self.config.episode_offset
         if not offset or not parsed.episode:
             return parsed
         try:
@@ -81,10 +83,14 @@ class DownloadService:
         key: str | None = None,
         paused: bool = False,
         title_override: str | None = None,
+        episode_offset: int | None = None,
+        season: int | None = None,
     ) -> DownloadTask:
         raw_title = raw_title or source
         parsed = parsed or parse_title(raw_title)
-        parsed = self.apply_offset(parsed)
+        if season is not None:
+            parsed = replace(parsed, season=season)
+        parsed = self.apply_offset(parsed, episode_offset)
         parsed = self.resolve_title(parsed, title_override)
         new_name = self.name_for(parsed) if rename else ""
 
@@ -94,13 +100,22 @@ class DownloadService:
         save_path = save_path if save_path is not None else (self.config.save_path or None)
         category = category if category is not None else (self.config.category or None)
 
+        rename_plan = self._build_rename_plan(parsed, flatten=library is not None) if rename else None
         torrent_id = self.client.add(
             source,
             save_path=save_path,
             name=None,
             category=category,
             paused=paused,
-            rename_plan=self._build_rename_plan(parsed, flatten=library is not None) if rename else None,
+            rename_plan=rename_plan,
+        )
+        # aria2's index-out names the files at add time (torrent sources only),
+        # so there is nothing left to rename later; mark it as done to keep
+        # rename_all cheap. Magnets still need the post-complete disk rename.
+        pre_named = (
+            rename
+            and self.client.name == "aria2"
+            and source_kind(source) in ("path", "url")
         )
         task = DownloadTask(
             key=key or source,
@@ -116,7 +131,7 @@ class DownloadService:
             source=source,
             save_path=save_path or "",
             category=category or "",
-            status="added",
+            status="renamed" if pre_named else "added",
         )
         self.store.upsert(task)
 
@@ -285,10 +300,13 @@ class DownloadService:
             self.store.set_status(task.key, "renamed")
         return renamed
 
+    #: 这些状态不需要（或不应该）再次请求下载器重命名。
+    _RENAME_SKIP_STATUSES = ("renamed", "no-video", "downloaded", "failed", "seen")
+
     def rename_all(self, *, only_torrent_id: str | None = None, limit: int | None = None) -> int:
         count = 0
         for task in self.store.list(limit=limit):
-            if task.status in ("renamed",):
+            if task.status in self._RENAME_SKIP_STATUSES:
                 continue
             if only_torrent_id and task.torrent_id != only_torrent_id:
                 continue
@@ -311,17 +329,89 @@ class DownloadService:
         return episode.parsed.resolution in preference
 
     @staticmethod
-    def _group_allowed(group: str, wanted: list[str]) -> bool:
-        lowered = (group or "").lower()
+    def _name_allowed(name: str, wanted: list[str]) -> bool:
+        lowered = (name or "").lower()
         return any(item.lower() in lowered for item in wanted if item)
 
-    def _match_group(self, episode: RssEpisode, feed) -> bool:
-        group = (episode.parsed.group if episode.parsed else "") or ""
-        if feed.groups and not self._group_allowed(group, feed.groups):
+    def _match_name(self, episode: RssEpisode, feed) -> bool:
+        name = (episode.parsed.title if episode.parsed else "") or ""
+        if feed.names and not self._name_allowed(name, feed.names):
             return False
-        if feed.exclude_groups and self._group_allowed(group, feed.exclude_groups):
+        if feed.exclude_names and self._name_allowed(name, feed.exclude_names):
             return False
         return True
+
+    def _pick_best(self, candidates: list[RssEpisode], feed) -> RssEpisode:
+        """Pick one release among several versions of the same episode.
+
+        Priority: resolution preference order → newest publish time → feed order.
+        """
+
+        preference = self.config.resolution_preference
+
+        def score(episode: RssEpisode) -> int:
+            parsed = episode.parsed
+            resolution = parsed.resolution if parsed else ""
+            if resolution and resolution in preference:
+                return preference.index(resolution)
+            return len(preference) + 1
+
+        best = candidates[0]
+        best_score = score(best)
+        best_published = best.published or ""
+        for episode in candidates[1:]:
+            current = score(episode)
+            published = episode.published or ""
+            if current < best_score or (current == best_score and published > best_published):
+                best, best_score, best_published = episode, current, published
+        return best
+
+    def _one_per_episode(self, episodes: list[RssEpisode], feed) -> list[RssEpisode]:
+        if not getattr(feed, "one_per_episode", False):
+            return episodes
+        groups: dict[str, list[RssEpisode]] = {}
+        order: list[str] = []
+        for episode in episodes:
+            key = episode.episode_key
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(episode)
+        selected: list[RssEpisode] = []
+        for key in order:
+            candidates = groups[key]
+            # 只要这一集已经有任意一个版本在库里，就整组跳过
+            if any(self.store.has_done(item.dedup_key) for item in candidates):
+                continue
+            selected.append(self._pick_best(candidates, feed))
+        return selected
+
+    def _apply_initial(self, feed, selected: list[RssEpisode]) -> list[RssEpisode]:
+        """First run of a feed: honour the ``initial`` policy."""
+
+        marker = f"rss:{feed.name}:initialized"
+        if self.store.get_meta(marker):
+            return selected
+        self.store.set_meta(marker, "1")
+        initial = str(getattr(feed, "initial", "latest") or "latest").lower()
+        if initial == "all":
+            return selected
+        if initial == "none":
+            for episode in selected:
+                self.store.mark_seen(episode.dedup_key, episode.title)
+            return []
+        if not selected:
+            return []
+        latest = selected[0]
+        for episode in selected[1:]:
+            number = episode.parsed.episode_number if episode.parsed else None
+            best_number = latest.parsed.episode_number if latest.parsed else None
+            if number is not None and (best_number is None or number > best_number):
+                latest = episode
+        for episode in selected:
+            if episode is not latest:
+                self.store.mark_seen(episode.dedup_key, episode.title)
+        return [latest]
 
     def run(
         self,
@@ -331,31 +421,44 @@ class DownloadService:
         dry_run: bool = False,
         rename: bool = True,
         on_event=None,
+        cancel=None,
     ) -> list[RunItem]:
         def emit(event: dict) -> None:
             if on_event is not None:
                 on_event(event)
 
+        def cancelled() -> bool:
+            return cancel is not None and cancel.is_set()
+
         results: list[RunItem] = []
         for feed in self.enabled_feeds(feed_names):
+            if cancelled():
+                emit({"type": "log", "message": "任务已取消"})
+                break
             episodes = fetch_feed(feed.url)
             emit({"type": "log", "message": f"[{feed.name}] 获取到 {len(episodes)} 条"})
             selected: list[RssEpisode] = []
             for episode in episodes:
                 if not episode.torrent_url:
                     continue
-                if self.store.has(episode.dedup_key):
+                if self.store.has_done(episode.dedup_key):
                     continue
                 if not self._match_resolution(episode):
                     continue
-                if not self._match_group(episode, feed):
+                if not self._match_name(episode, feed):
                     continue
                 selected.append(episode)
+            selected = self._one_per_episode(selected, feed)
+            if not dry_run:
+                selected = self._apply_initial(feed, selected)
             if limit:
                 selected = selected[:limit]
             total = len(selected)
             emit({"type": "progress", "done": 0, "total": total, "message": feed.name})
             for index, episode in enumerate(selected, start=1):
+                if cancelled():
+                    emit({"type": "log", "message": "任务已取消"})
+                    return results
                 if dry_run:
                     results.append(RunItem(episode=episode, skipped="dry-run"))
                     emit({"type": "item", "item": {"title": episode.title, "skipped": "dry-run"}})
@@ -369,6 +472,8 @@ class DownloadService:
                         rename=rename,
                         key=episode.dedup_key,
                         title_override=feed.title or None,
+                        episode_offset=getattr(feed, "episode_offset", None),
+                        season=getattr(feed, "season", None),
                     )
                 except Exception as exc:  # noqa: BLE001
                     results.append(RunItem(episode=episode, skipped=f"error: {exc}"))

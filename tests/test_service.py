@@ -177,29 +177,29 @@ def _fake_episodes():
             parsed=parse_title("[Lilith-Raws] Anime - 01 [1080p]"),
         ),
         RssEpisode(
-            title="[ANi] Anime - 02 [1080p]",
+            title="[ANi] Bocchi - 02 [1080p]",
             torrent_url="http://tracker/2.torrent",
-            parsed=parse_title("[ANi] Anime - 02 [1080p]"),
+            parsed=parse_title("[ANi] Bocchi - 02 [1080p]"),
         ),
     ]
 
 
-def test_run_allowlists_groups(tmp_path, monkeypatch):
+def test_run_allowlists_names(tmp_path, monkeypatch):
     import amine_downloader.service as service_module
 
     monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
     service, _, _ = build_service(tmp_path, [])
-    service.config.rss = [RssFeed(name="F", url="http://feed", groups=["Lilith"])]
+    service.config.rss = [RssFeed(name="F", url="http://feed", names=["Anime"])]
     results = service.run()
     assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
 
 
-def test_run_excludes_groups(tmp_path, monkeypatch):
+def test_run_excludes_names(tmp_path, monkeypatch):
     import amine_downloader.service as service_module
 
     monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
     service, _, _ = build_service(tmp_path / "b", [])
-    service.config.rss = [RssFeed(name="F", url="http://feed", exclude_groups=["ANi"])]
+    service.config.rss = [RssFeed(name="F", url="http://feed", exclude_names=["Bocchi"])]
     results = service.run()
     assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
 
@@ -209,7 +209,7 @@ def test_run_emits_progress_events(tmp_path, monkeypatch):
 
     monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
     service, _, _ = build_service(tmp_path / "p", [])
-    service.config.rss = [RssFeed(name="F", url="http://feed")]
+    service.config.rss = [RssFeed(name="F", url="http://feed", initial="all")]
     events: list[dict] = []
     service.run(on_event=events.append)
     progress = [event for event in events if event["type"] == "progress"]

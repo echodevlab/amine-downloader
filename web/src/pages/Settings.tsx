@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { LoadingBar, Spinner } from "@/components/ui/spinner"
 import { api } from "@/lib/api"
 
 type Section = "app" | "aria2" | "qbittorrent" | "library" | "kazumi"
@@ -72,20 +73,48 @@ export default function SettingsPage() {
   const [form, setForm] = useState<Form | null>(null)
   const [configPath, setConfigPath] = useState("")
   const [aria2Secret, setAria2Secret] = useState("")
+  const [aria2SecretSet, setAria2SecretSet] = useState(false)
   const [qbApiKey, setQbApiKey] = useState("")
+  const [qbApiKeySet, setQbApiKeySet] = useState(false)
   const [qbPassword, setQbPassword] = useState("")
+  const [qbPasswordSet, setQbPasswordSet] = useState(false)
+  const [webPasswordSet, setWebPasswordSet] = useState(false)
+  const [pathMap, setPathMap] = useState("")
   const [busy, setBusy] = useState(false)
 
   async function load() {
     try {
       const data = await api.getConfig()
+      const app = { ...data.app }
+      setWebPasswordSet(Boolean(app.web_password_set))
+      delete app.web_password_set
+      const kazumi = { ...data.kazumi }
+      // 订阅由 RSS / 解析页单独管理，设置页不要把它写成内联数组。
+      delete kazumi.subscribe
+      const aria2 = { ...data.aria2 }
+      setAria2SecretSet(Boolean(aria2.secret_set))
+      delete aria2.secret_set
+      const qbittorrent = { ...data.qbittorrent }
+      setQbApiKeySet(Boolean(qbittorrent.api_key_set))
+      setQbPasswordSet(Boolean(qbittorrent.password_set))
+      delete qbittorrent.api_key_set
+      delete qbittorrent.password_set
       setForm({
-        app: data.app,
-        aria2: data.aria2,
-        qbittorrent: data.qbittorrent,
+        app,
+        aria2,
+        qbittorrent,
         library: data.library,
-        kazumi: data.kazumi,
+        kazumi,
       })
+      const raw = data.app.path_map
+      setPathMap(
+        Array.isArray(raw)
+          ? (raw as unknown[][])
+              .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+              .map((pair) => `${pair[0]}=>${pair[1]}`)
+              .join(", ")
+          : "",
+      )
       setConfigPath(data.config_path)
     } catch (error) {
       toast.error((error as Error).message)
@@ -104,8 +133,12 @@ export default function SettingsPage() {
 
   function body(): Record<string, unknown> {
     if (!form) return {}
+    const mapped = pathMap
+      .split(/[,，]/)
+      .map((entry) => entry.split("=>").map((part) => part.trim()))
+      .filter((pair) => pair.length === 2 && pair[0] && pair[1])
     return {
-      app: form.app,
+      app: { ...form.app, path_map: mapped },
       aria2: { ...form.aria2, secret: aria2Secret },
       qbittorrent: { ...form.qbittorrent, api_key: qbApiKey, password: qbPassword },
       library: form.library,
@@ -151,6 +184,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {busy && <LoadingBar label="正在处理…" />}
       <Card>
         <CardHeader>
           <CardTitle>下载器</CardTitle>
@@ -161,7 +195,7 @@ export default function SettingsPage() {
             <Label className="text-xs">当前下载器</Label>
             <select
               className={selectClass}
-              value={String(form.app.downloader ?? "aria2")}
+              value={String(form.app.downloader ?? "qbittorrent")}
               onChange={(event) => patch("app", "downloader", event.target.value)}
             >
               <option value="aria2">aria2</option>
@@ -173,7 +207,7 @@ export default function SettingsPage() {
               <Save /> 保存
             </Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={test}>
-              <PlugZap /> 测试连接
+              {busy ? <Spinner /> : <PlugZap />} 测试连接
             </Button>
             <Button size="sm" variant="outline" onClick={load}>
               <RefreshCw /> 重新加载
@@ -211,6 +245,28 @@ export default function SettingsPage() {
             onChange={(value) => patch("app", "episode_offset", value === "" ? 0 : Number(value))}
             placeholder="0"
           />
+          <Field
+            label="定时追番间隔（分钟，0 = 关闭）"
+            value={form.app.interval}
+            onChange={(value) => patch("app", "interval", value === "" ? 30 : Number(value))}
+            placeholder="30"
+          />
+          <Field
+            label={
+              webPasswordSet
+                ? "Web 密码（已设置，留空不改）"
+                : "Web 密码（可选，Basic Auth）"
+            }
+            value={form.app.web_password}
+            onChange={(value) => patch("app", "web_password", value)}
+            type="password"
+          />
+          <Field
+            label="路径映射（下载器路径=>本机路径，逗号分隔）"
+            value={pathMap}
+            onChange={setPathMap}
+            placeholder="/downloads=>Z:/downloads"
+          />
         </CardContent>
       </Card>
 
@@ -224,10 +280,10 @@ export default function SettingsPage() {
             label="RPC 地址"
             value={form.aria2.rpc_url}
             onChange={(value) => patch("aria2", "rpc_url", value)}
-            placeholder="http://aria2-next:6800/jsonrpc"
+            placeholder="http://127.0.0.1:6800/jsonrpc"
           />
           <Field
-            label={form.aria2.secret_set ? "密钥（已设置，留空不改）" : "密钥"}
+            label={aria2SecretSet ? "密钥（已设置，留空不改）" : "密钥"}
             value={aria2Secret}
             onChange={setAria2Secret}
             type="password"
@@ -237,13 +293,13 @@ export default function SettingsPage() {
             label="下载目录（aria2 侧）"
             value={form.aria2.download_dir}
             onChange={(value) => patch("aria2", "download_dir", value)}
-            placeholder="/wenwen/media/acg"
+            placeholder="/media/anime"
           />
           <Field
             label="本机映射目录（可选）"
             value={form.aria2.local_dir}
             onChange={(value) => patch("aria2", "local_dir", value)}
-            placeholder="/wenwen/media/acg"
+            placeholder="/media/anime"
           />
         </CardContent>
       </Card>
@@ -258,10 +314,10 @@ export default function SettingsPage() {
             label="地址"
             value={form.qbittorrent.url}
             onChange={(value) => patch("qbittorrent", "url", value)}
-            placeholder="http://qbittorrent:8085"
+            placeholder="http://127.0.0.1:8080"
           />
           <Field
-            label={form.qbittorrent.api_key_set ? "API Key（已设置，留空不改）" : "API Key（>=5.2 推荐）"}
+            label={qbApiKeySet ? "API Key（已设置，留空不改）" : "API Key（>=5.2 推荐）"}
             value={qbApiKey}
             onChange={setQbApiKey}
             type="password"
@@ -273,7 +329,7 @@ export default function SettingsPage() {
             placeholder="admin"
           />
           <Field
-            label={form.qbittorrent.password_set ? "密码（已设置，留空不改）" : "密码"}
+            label={qbPasswordSet ? "密码（已设置，留空不改）" : "密码"}
             value={qbPassword}
             onChange={setQbPassword}
             type="password"
@@ -298,13 +354,13 @@ export default function SettingsPage() {
             label="媒体库根目录"
             value={form.library.root}
             onChange={(value) => patch("library", "root", value)}
-            placeholder="/wenwen/media/acg"
+            placeholder="/media/anime"
           />
           <Field
             label="本机映射目录（可选）"
             value={form.library.local_root}
             onChange={(value) => patch("library", "local_root", value)}
-            placeholder="/wenwen/media/acg"
+            placeholder="/media/anime"
           />
           <Field
             label="剧集文件夹模板"

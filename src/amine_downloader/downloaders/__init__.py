@@ -41,6 +41,8 @@ def create_downloader(config) -> BaseDownloader:
         library = config.library or {}
         if library.get("enabled") and library.get("root") and library.get("local_root"):
             path_map.append((str(library["root"]), str(library["local_root"])))
+        # 显式 path_map 优先级最高，其次是上面的 library 映射。
+        path_map.extend((str(src), str(dst)) for src, dst in (config.path_map or []))
         return Aria2Downloader(
             rpc_url=str(rpc_url),
             secret=str(settings.get("secret", "")),

@@ -16,8 +16,13 @@ import { api, type Job, type JobEvent } from "@/lib/api"
 
 const KIND_LABEL: Record<string, string> = {
   rss_run: "RSS 追番",
+  rss_preview: "RSS 预览",
   kazumi_run: "解析追番",
+  kazumi_preview: "解析追番预览",
   kazumi_download: "解析下载",
+  kazumi_download_preview: "解析预览",
+  kazumi_sync: "同步状态",
+  set_title: "修改标题",
   rename: "重命名",
 }
 

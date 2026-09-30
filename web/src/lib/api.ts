@@ -30,8 +30,27 @@ export type RssFeed = {
   name: string
   url: string
   enabled: boolean
-  groups?: string[]
-  exclude_groups?: string[]
+  title?: string
+  names?: string[]
+  exclude_names?: string[]
+  one_per_episode?: boolean
+  initial?: "latest" | "all" | "none"
+  season?: number | null
+  episode_offset?: number | null
+}
+
+export type RssPreview = {
+  url: string
+  total: number
+  items: {
+    title: string
+    group: string
+    name: string
+    season: number
+    episode: string
+    resolution: string
+    torrent_url: string
+  }[]
 }
 export type RssRunItem = {
   title: string
@@ -69,11 +88,16 @@ export type KazumiResult = {
 export type KazumiSubscription = {
   name: string
   rule: string
+  source?: string
   hit: number
   road: number
   quality: string
   save_path: string
   enabled: boolean
+  title?: string
+  initial?: "latest" | "all" | "none"
+  season?: number | null
+  episode_offset?: number | null
 }
 
 export type Status = {
@@ -82,6 +106,7 @@ export type Status = {
   config_path: string
   rss: number
   kazumi_subscriptions: number
+  interval?: number
 }
 
 export type ConfigData = {
@@ -153,9 +178,37 @@ export const api = {
       `/api/torrents/${id}/${action}${action === "remove" && deleteFiles ? "?delete_files=1" : ""}`,
       { method: "POST" },
     ),
-  tasks: () => request<DownloadTask[]>("/api/tasks"),
+  tasks: (params?: { status?: string; q?: string; title?: string; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams()
+    if (params?.status) query.set("status", params.status)
+    if (params?.q) query.set("q", params.q)
+    if (params?.title) query.set("title", params.title)
+    if (params?.limit != null) query.set("limit", String(params.limit))
+    if (params?.offset != null) query.set("offset", String(params.offset))
+    const suffix = query.toString() ? `?${query.toString()}` : ""
+    return request<{ items: DownloadTask[]; total: number; titles: string[] }>(`/api/tasks${suffix}`)
+  },
+  deleteTask: (key: string) =>
+    request<{ ok: boolean }>(`/api/tasks?key=${encodeURIComponent(key)}`, { method: "DELETE" }),
+  retryTask: (key: string) =>
+    request<{ ok: boolean; task_id: string }>("/api/tasks/retry", {
+      method: "POST",
+      body: JSON.stringify({ key }),
+    }),
   rename: () => request<{ renamed: number }>("/api/rename", { method: "POST" }),
   rss: () => request<RssFeed[]>("/api/rss"),
+  addRss: (feed: Partial<RssFeed>) =>
+    request<{ ok: boolean }>("/api/rss", { method: "POST", body: JSON.stringify(feed) }),
+  updateRss: (index: number, feed: Partial<RssFeed>) =>
+    request<{ ok: boolean }>(`/api/rss/${index}`, { method: "PUT", body: JSON.stringify(feed) }),
+  deleteRss: (index: number) =>
+    request<{ ok: boolean }>(`/api/rss/${index}`, { method: "DELETE" }),
+  previewRss: (params: { url?: string; name?: string }) => {
+    const query = new URLSearchParams()
+    if (params.url) query.set("url", params.url)
+    if (params.name) query.set("name", params.name)
+    return request<RssPreview>(`/api/rss/preview?${query.toString()}`)
+  },
   runRss: (body: { feeds?: string[]; limit?: number | null; dry_run?: boolean }) =>
     request<RssRunItem[]>("/api/run", { method: "POST", body: JSON.stringify(body) }),
   parse: (title: string, template?: string) =>
@@ -173,13 +226,20 @@ export const api = {
     request<{ hits: KazumiHit[]; errors: string[] }>(
       `/api/kazumi/search?q=${encodeURIComponent(q)}${rule ? `&rule=${encodeURIComponent(rule)}` : ""}`,
     ),
-  kazumiChapters: (q: string, rule: string | undefined, hit: number) =>
-    request<KazumiChapters>(
-      `/api/kazumi/chapters?q=${encodeURIComponent(q)}${rule ? `&rule=${encodeURIComponent(rule)}` : ""}&hit=${hit}`,
-    ),
+  kazumiChapters: (params: { q: string; rule?: string; source?: string; name?: string; hit?: number }) => {
+    const query = new URLSearchParams()
+    query.set("q", params.q)
+    if (params.rule) query.set("rule", params.rule)
+    if (params.source) query.set("source", params.source)
+    if (params.name) query.set("name", params.name)
+    query.set("hit", String(params.hit ?? 0))
+    return request<KazumiChapters>(`/api/kazumi/chapters?${query.toString()}`)
+  },
   kazumiDownload: (body: {
     keyword: string
     rule?: string
+    source?: string
+    name?: string
     hit?: number
     road?: number
     episode?: string
@@ -188,14 +248,31 @@ export const api = {
     dry_run?: boolean
     url?: string
     title?: string
+    force?: boolean
   }) =>
     request<KazumiResult[]>("/api/kazumi/download", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   kazumiSubscriptions: () => request<KazumiSubscription[]>("/api/kazumi/subscriptions"),
+  addKazumiSubscription: (sub: Partial<KazumiSubscription>) =>
+    request<{ ok: boolean }>("/api/kazumi/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(sub),
+    }),
+  updateKazumiSubscription: (index: number, sub: Partial<KazumiSubscription>) =>
+    request<{ ok: boolean }>(`/api/kazumi/subscriptions/${index}`, {
+      method: "PUT",
+      body: JSON.stringify(sub),
+    }),
+  deleteKazumiSubscription: (index: number) =>
+    request<{ ok: boolean }>(`/api/kazumi/subscriptions/${index}`, { method: "DELETE" }),
   kazumiRun: (body: { names?: string[]; limit?: number | null; dry_run?: boolean }) =>
     request<KazumiResult[]>("/api/kazumi/run", { method: "POST", body: JSON.stringify(body) }),
+  kazumiSync: () =>
+    request<{ downloaded: number; failed: number; pending: number }>("/api/kazumi/sync", {
+      method: "POST",
+    }),
   createJob: (kind: string, params: Record<string, unknown>) =>
     request<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ kind, params }) }),
   jobs: () => request<Job[]>("/api/jobs"),

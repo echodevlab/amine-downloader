@@ -287,15 +287,23 @@ def cmd_remove(args) -> int:
 
 
 def cmd_title(args) -> int:
+    from .server import _save_title_alias
+
     service = _load_service(args)
     try:
         task = service.store.get(args.key) if args.key else None
         if task is None and args.id:
-            task = next((item for item in service.store.list() if item.torrent_id == args.id), None)
+            task = service.store.get_by_torrent(args.id)
         if task is None:
             print("未找到任务（可用 `list` 或历史记录查看 key / id）", file=sys.stderr)
             return 1
-        service.store.set_title(task.key, args.title)
+        old_title = task.title
+        if args.apply_all and old_title:
+            service.store.set_title_all(old_title, args.title)
+        else:
+            service.store.set_title(task.key, args.title)
+        if args.alias and old_title:
+            _save_title_alias(old_title, args.title)
         task.title = args.title
         renamed = service.rename_task(task)
     except AmineError as exc:
@@ -305,6 +313,21 @@ def cmd_title(args) -> int:
         service.close()
     suffix = "（已重命名）" if renamed else "（重命名将在任务完成后进行）"
     print(f"已设置标题: {args.title} {suffix}")
+    return 0
+
+
+def cmd_kazumi_sync(args) -> int:
+    service = _load_kazumi(args)
+    try:
+        counts = service.sync_statuses()
+    except AmineError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        service.close()
+    print(
+        f"已同步: 完成 {counts['downloaded']}，失败 {counts['failed']}，进行中 {counts['pending']}"
+    )
     return 0
 
 
@@ -450,6 +473,7 @@ def cmd_kazumi_download(args) -> int:
         results = service.download(
             args.keyword,
             rule_name=args.rule,
+            source=args.source,
             hit_index=args.hit,
             road_index=args.road,
             episode=args.episode,
@@ -459,6 +483,7 @@ def cmd_kazumi_download(args) -> int:
             dry_run=args.dry_run,
             sniffed_url=args.url,
             title=args.title,
+            force=args.force,
         )
     except AmineError as exc:
         print(f"错误: {exc}", file=sys.stderr)
@@ -554,6 +579,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_title.add_argument("key", nargs="?", help="任务 key")
     p_title.add_argument("--id", help="按 torrent id / gid 查找")
     p_title.add_argument("--title", required=True, help="新的番剧标题")
+    p_title.add_argument("--apply-all", action="store_true", help="应用到同名的所有记录")
+    p_title.add_argument("--alias", action="store_true", help="同时写入 [titles] 别名")
     p_title.set_defaults(func=cmd_title)
 
     p_remove = sub.add_parser("remove", help="移除任务")
@@ -593,14 +620,16 @@ def build_parser() -> argparse.ArgumentParser:
     k_download = kazumi_sub.add_parser("download", help="解析并下载（交给 aria2）")
     k_download.add_argument("keyword", help="番剧名称")
     k_download.add_argument("--rule", help="指定规则名称")
+    k_download.add_argument("--source", help="作品地址（跳过搜索，配合 --rule 使用）")
     k_download.add_argument("--hit", type=int, default=0, help="第几个搜索结果（从 0 开始）")
     k_download.add_argument("--road", type=int, default=0, help="第几条播放线路（从 0 开始）")
-    k_download.add_argument("--episode", help="仅下载指定集数")
+    k_download.add_argument("--episode", help="集数，支持 1-12、1,3,5 等写法")
     k_download.add_argument("--limit", type=int, help="最多下载 N 集")
     k_download.add_argument("--quality", help="优先清晰度，如 1080p")
     k_download.add_argument("--title", help="覆盖解析出的番剧名")
     k_download.add_argument("--save-path", help="保存路径")
     k_download.add_argument("--url", help="已知视频流地址，跳过浏览器嗅探")
+    k_download.add_argument("--force", action="store_true", help="已下载过的集数也重新下载")
     k_download.add_argument("--dry-run", action="store_true", help="只解析，不下载")
     k_download.set_defaults(func=cmd_kazumi_download)
 
@@ -609,6 +638,9 @@ def build_parser() -> argparse.ArgumentParser:
     k_run.add_argument("--limit", type=int, help="每个订阅最多下载最新的 N 集")
     k_run.add_argument("--dry-run", action="store_true", help="只解析，不下载")
     k_run.set_defaults(func=cmd_kazumi_run)
+
+    k_sync = kazumi_sub.add_parser("sync", help="按 aria2 实际状态更新下载记录")
+    k_sync.set_defaults(func=cmd_kazumi_sync)
 
     return parser
 

@@ -15,3 +15,21 @@ wheels/
 .local/
 *.db
 pytest-of-*/
+
+# 默认配置/数据目录 = 当前工作目录，忽略本地生成的文件
+/config.toml
+/config.toml.bak
+/config.toml.*.bak
+/kazumi-rules/
+
+# 下载产物 / 媒体文件（媒体库用相对路径时，避免把大文件提交进仓库）
+*.mp4
+*.mkv
+*.webm
+*.flv
+*.m2ts
+*.srt
+*.ass
+*.ssa
+*.vtt
+/安达与沧浪/

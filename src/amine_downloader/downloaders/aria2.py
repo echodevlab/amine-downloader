@@ -297,6 +297,21 @@ class Aria2Downloader(BaseDownloader):
         except DownloadError:
             pass
 
+    def get_global_option(self, name: str) -> str | None:
+        try:
+            result = self._call("aria2.getGlobalOption")
+        except DownloadError:
+            return None
+        if isinstance(result, dict):
+            value = result.get(name)
+            return str(value) if value not in (None, "") else None
+        return None
+
+    def local_target(self, path: str) -> Path:
+        """Public alias of :meth:`_local_target` for path mapping callers."""
+
+        return self._local_target(path)
+
     def change_option(self, gid: str, options: dict) -> None:
         self._call(
             "aria2.changeOption",

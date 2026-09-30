@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import { api, type ParseResult } from "@/lib/api"
 
 export default function ToolsPage() {
@@ -58,7 +59,7 @@ export default function ToolsPage() {
         </div>
         <div>
           <Button size="sm" disabled={busy} onClick={parse}>
-            <Wand2 /> 解析
+            {busy ? <Spinner /> : <Wand2 />} 解析
           </Button>
         </div>
 

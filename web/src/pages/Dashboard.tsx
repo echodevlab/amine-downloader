@@ -42,9 +42,20 @@ function stateVariant(state: string) {
   return "outline"
 }
 
+function isPaused(state: string) {
+  const value = state.toLowerCase()
+  return (
+    value.includes("paused") ||
+    value.includes("stopped") ||
+    value === "waiting" ||
+    value === "queued"
+  )
+}
+
 export default function Dashboard() {
   const [torrents, setTorrents] = useState<TorrentInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [onlyAmine, setOnlyAmine] = useState(false)
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true)
@@ -73,6 +84,14 @@ export default function Dashboard() {
     }
   }
 
+  function remove(torrent: TorrentInfo) {
+    if (!window.confirm(`确定移除「${torrent.name}」？`)) return
+    const deleteFiles = window.confirm("是否同时删除已下载的文件？\n确定 = 删除文件，取消 = 仅移除任务")
+    act(torrent.id, "remove", deleteFiles)
+  }
+
+  const visible = onlyAmine ? torrents.filter((torrent) => torrent.category) : torrents
+
   return (
     <Card>
       <CardHeader>
@@ -80,7 +99,16 @@ export default function Dashboard() {
         <CardDescription>下载器中的任务（每 5 秒自动刷新）</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={onlyAmine}
+              onChange={(event) => setOnlyAmine(event.target.checked)}
+            />
+            只看 amine 添加的任务
+          </label>
           <Button variant="outline" size="sm" disabled={loading} onClick={() => load(true)}>
             <RefreshCw /> 刷新
           </Button>
@@ -96,60 +124,66 @@ export default function Dashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {torrents.length === 0 ? (
+            {visible.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground">
                   暂无任务
                 </TableCell>
               </TableRow>
             ) : (
-              torrents.map((torrent) => (
-                <TableRow key={torrent.id}>
-                  <TableCell className="max-w-96 truncate" title={torrent.name}>
-                    {torrent.name}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Progress value={torrent.progress * 100} className="w-32" />
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {(torrent.progress * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={stateVariant(torrent.state)}>{torrent.state || "-"}</Badge>
-                  </TableCell>
-                  <TableCell className="tabular-nums">{formatSize(torrent.size)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        title="暂停"
-                        onClick={() => act(torrent.id, "pause")}
-                      >
-                        <Pause />
-                      </Button>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        title="继续"
-                        onClick={() => act(torrent.id, "resume")}
-                      >
-                        <Play />
-                      </Button>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        title="移除"
-                        onClick={() => act(torrent.id, "remove")}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              visible.map((torrent) => {
+                const paused = isPaused(torrent.state)
+                return (
+                  <TableRow key={torrent.id}>
+                    <TableCell className="max-w-96 truncate" title={torrent.name}>
+                      {torrent.name}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Progress value={torrent.progress * 100} className="w-32" />
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {(torrent.progress * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={stateVariant(torrent.state)}>{torrent.state || "-"}</Badge>
+                    </TableCell>
+                    <TableCell className="tabular-nums">{formatSize(torrent.size)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {paused ? (
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            title="继续"
+                            onClick={() => act(torrent.id, "resume")}
+                          >
+                            <Play />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            title="暂停"
+                            onClick={() => act(torrent.id, "pause")}
+                          >
+                            <Pause />
+                          </Button>
+                        )}
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          title="移除"
+                          onClick={() => remove(torrent)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>

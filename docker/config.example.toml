@@ -11,6 +11,10 @@ save_path = ""
 category = "amine"
 # 字幕组集数与番剧集数不一致时的偏移
 episode_offset = 0
+# 内置调度间隔（分钟，0 = 关闭）：定时追番并重命名已完成任务
+interval = 30
+# Web UI 访问密码（可选，Basic Auth）
+web_password = ""
 
 # 只用 aria2 时无需 [qbittorrent]。
 # 若改用 qBittorrent：把 [app].downloader 改成 "qbittorrent"，并取消下面注释。
@@ -56,12 +60,17 @@ temp_dir = "/tmp"
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
 # title = "葬送的芙莉莲"
+# names = ["葬送的芙莉莲"]           # 只下番剧名匹配这些关键词的条目
+# one_per_episode = true            # 同一集只保留一个版本
+# initial = "latest"                # 首次运行：latest / all / none
 
 # Kazumi 解析追番（可选）
 # [[kazumi.subscribe]]
 # name = "葬送的芙莉莲"
 # rule = "AGE"
+# source = ""                       # 由 Web 添加订阅时自动写入，设置后跳过搜索
 # hit = 0
 # road = 0
 # quality = "1080p"
 # title = "葬送的芙莉莲"
+# initial = "latest"

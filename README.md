@@ -61,25 +61,27 @@ amine-downloader run
 amine-downloader rename
 ```
 
-配合定时任务即可实现追番，例如 crontab：
+`serve` 内置了定时调度（`[app] interval`，单位分钟，默认 30，设为 0 关闭），
+会定时运行 RSS 追番、Kazumi 追番，并自动重命名 aria2 已完成的任务。
+Docker 部署无需额外配置 cron；命令行部署仍可继续用外部 cron 调 `amine-downloader run`。
 
-```cron
-*/30 * * * * cd /path/to/amine-downloader && amine-downloader run
-```
-
-> 首次运行时数据库为空，`run` 会把订阅源里的**全部历史剧集**都加入下载。
-> 建议第一次先执行 `amine-downloader run --dry-run` 查看，或用 `--limit 1` 只下载最新一集。
+> 首次运行订阅时，默认 `initial = "latest"`，**只下载最新一集**，其余标记为已见，
+> 不会再把整季历史剧集一次性加入下载。
+> 需要其它行为可在订阅里设置 `initial = "all"`（全部下载）或 `initial = "none"`（只标记已见）。
+> 也可以用 `--dry-run` 预览，或用 `--limit 1` 限制数量。
 
 ## 配置文件
 
-默认路径：
+默认路径是**当前工作目录**：
 
-| 平台 | 路径 |
+| 文件 | 路径 |
 | --- | --- |
-| Windows | `%APPDATA%\amine-downloader\config.toml` |
-| Linux / macOS | `~/.config/amine-downloader/config.toml` |
+| 配置 | `./config.toml` |
+| 数据库 | `./data.db`（任务记录 `./jobs.db`） |
+| 规则 | `./kazumi-rules/` |
 
-可用环境变量覆盖：`AMINE_DOWNLOADER_CONFIG`（配置文件）、`AMINE_DOWNLOADER_CONFIG_DIR`（配置目录）、
+也就是说，在项目目录里直接运行就会用本目录下的 `config.toml` / `data.db`。
+可用环境变量覆盖：`AMINE_DOWNLOADER_CONFIG`（配置文件）、`AMINE_DOWNLOADER_CONFIG_DIR`（配置/数据目录）、
 `AMINE_DOWNLOADER_DATA`（数据库文件）。
 
 ```toml
@@ -98,6 +100,12 @@ category = "amine"
 episode_offset = 0
 # 只下载指定分辨率（留空表示全部）
 resolution_preference = ["1080p", "2160p"]
+# 内置调度间隔（分钟，0 = 关闭）
+interval = 30
+# Web UI 访问密码（可选，Basic Auth）
+web_password = ""
+# 下载器路径 -> 本机路径映射（可选）
+# path_map = [["/downloads", "Z:/downloads"]]
 
 [qbittorrent]
 url = "http://127.0.0.1:8080"
@@ -119,27 +127,35 @@ local_dir = ""
 name = "Mikan - 葬送的芙莉莲"
 url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 enabled = true
-# 只下这些字幕组（可选，大小写不敏感的子串匹配）
-# groups = ["Lilith-Raws", "ANi"]
-# 排除这些字幕组（可选）
-# exclude_groups = ["某字幕组"]
+# 只下番剧名匹配这些关键词的条目（可选，大小写不敏感的子串匹配）
+# names = ["葬送的芙莉莲"]
+# 排除番剧名匹配这些关键词的条目（可选）
+# exclude_names = ["某番剧"]
+# 同一集只保留一个版本（默认 true，按 分辨率 → 发布时间 选择）
+# one_per_episode = true
+# 首次运行策略：latest / all / none
+# initial = "latest"
+# 覆盖季号 / 集数偏移（可选，优先级高于全局）
+# season = 2
+# episode_offset = 12
 ```
 
-### 限定字幕组
+### 按番剧名筛选
 
-蜜柑的 RSS 是**按番剧**给的（包含该番剧的所有字幕组），所以按**解析出的字幕组**过滤：
+除了**按番剧订阅**（`bangumiId`），蜜柑也提供**聚合源**（如 Mikan Classic，一个源里包含多个番剧）。
+用解析出的**番剧名**做筛选，只保留想看的番剧：
 
 ```toml
 [[rss]]
-name = "Mikan - 葬送的芙莉莲"
-url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
-groups = ["Lilith-Raws", "ANi"]   # 白名单：只下这些
-# exclude_groups = ["某字幕组"]      # 黑名单：排除这些
+name = "Mikan Classic"
+url = "https://mikanani.me/RSS/Classic"
+names = ["葬送的芙莉莲", "孤独摇滚"]   # 白名单：只下这些番剧
+# exclude_names = ["某番剧"]            # 黑名单：排除这些番剧
 ```
 
-- 匹配是**大小写不敏感的子串**：`groups = ["Lilith"]` 也能匹配 `Lilith-Raws`。
+- 匹配是**大小写不敏感的子串**：`names = ["芙莉莲"]` 也能匹配 `葬送的芙莉莲`。
 - 同时设置时：先看白名单，再看黑名单。
-- 用 `amine-downloader rss "<订阅源名称或URL>"` 可以先看看有哪些字幕组；`run --dry-run` 也能确认过滤效果。
+- 用 `amine-downloader rss "<订阅源名称或URL>"` 可以先看看解析出的番剧名；`run --dry-run` 也能确认过滤效果。
 
 ### 获取订阅源地址
 
@@ -233,14 +249,15 @@ Web UI：解析下载页有「标题（可选覆盖）」输入框；历史记�
 | `list [--json]` | 列出下载器中的任务 |
 | `status` | 测试下载器连接 |
 | `rename [--id ID] [--limit N]` | 对任务执行重命名 |
-| `title [KEY] --title T [--id ID]` | 修改任务的番剧标题并重命名 |
+| `title [KEY] --title T [--id ID] [--apply-all] [--alias]` | 修改任务的番剧标题并重命名（可应用到同名记录 / 写入别名）|
 | `remove ID [--delete-files]` | 移除任务 |
 | `kazumi rules [--json]` | 列出已导入的 Kazumi 规则 |
 | `kazumi import SOURCE...` | 导入规则（本地文件或 URL） |
 | `kazumi search KEYWORD [--rule R] [--json]` | 搜索番剧（省略 `--rule` 则**并发搜索全部规则**，返回所有结果）|
 | `kazumi chapters KEYWORD [--rule R] [--hit N] [--json]` | 查看播放线路与剧集 |
-| `kazumi download KEYWORD [--rule R] [--road N] [--episode N] [--quality Q] [--url U] [--dry-run]` | 解析并下载（交给 aria2） |
+| `kazumi download KEYWORD [--rule R] [--source S] [--road N] [--episode 1-12,15] [--quality Q] [--url U] [--force] [--dry-run]` | 解析并下载（交给 aria2） |
 | `kazumi run [NAME...] [--limit N] [--dry-run]` | 按 `[[kazumi.subscribe]]` 批量追番（自动跳过已下载） |
+| `kazumi sync` | 按 aria2 实际状态更新下载记录（完成 / 失败） |
 | `serve [--host H] [--port P]` | 启动 Web UI（React + shadcn） |
 
 全局参数 `--config PATH` 可指定配置文件。顶层 `run` 会同时处理 RSS 订阅与 Kazumi 解析订阅
@@ -454,17 +471,22 @@ uv run amine-downloader serve --port 8420
 cd web && bun run dev
 ```
 
-面板包含：**下载中**（进度 / 暂停 / 继续 / 移除）、**历史记录**（目标文件名 / 一键重命名）、
-**RSS 订阅**（预览 / 追番）、**解析下载**（导入规则 / 搜索 / 选集 / 下载 / 追番订阅）、
+面板包含：**下载中**（进度 / 暂停 / 继续 / 带确认的移除 / 只看 amine 任务）、
+**历史记录**（搜索 / 筛选 / 分页 / 改标题并应用到同名记录或写入别名 / 删除 / 重试）、
+**RSS 订阅**（网页增删改订阅、预览解析结果与番剧名、按番剧名筛选、单个订阅预览 / 下载、首次运行策略）、
+**解析下载**（导入规则 / 搜索并展示失败原因 / 勾选剧集或填 `1-12` / 下载 / 去重提示 / 一键加入订阅）、
 **任务**（后台任务 + 实时进度）、**工具**（标题解析预览）。
 
 耗时操作（追番、解析下载、重命名）会作为**后台任务**执行，界面通过 **SSE**
-（`/api/jobs/{id}/events`）实时显示进度与结果，不会阻塞：
+（`/api/jobs/{id}/events`）实时显示进度与结果，不会阻塞。同一类任务同时只允许一个，
+重复点击会复用正在运行的任务，避免重复添加；任务摘要会持久化，重启后仍能看到历史记录：
 
-- `POST /api/jobs` `{kind, params}`，kind 为 `rss_run` / `kazumi_run` / `kazumi_download` / `rename`
+- `POST /api/jobs` `{kind, params}`，kind 为 `rss_run` / `kazumi_run` / `kazumi_download` / `kazumi_sync` / `set_title` / `rename`
 - `GET /api/jobs`、`GET /api/jobs/{id}`、`GET /api/jobs/{id}/events`（SSE）、`POST /api/jobs/{id}/cancel`
+- 取消会真正生效：任务会在每集 / 每个源的循环开头检查取消标记并提前停止
 
 > `serve` 默认只监听 `127.0.0.1`；局域网访问用 `--host 0.0.0.0`，注意别暴露到公网。
+> 在公网 / 局域网部署时建议设置 `[app] web_password`，浏览器会弹出 Basic Auth 登录框。
 
 ## Docker
 

@@ -37,6 +37,13 @@ const NAV = [
 
 type NavKey = (typeof NAV)[number]["key"]
 
+const NAV_KEYS = NAV.map((item) => item.key) as readonly string[]
+
+function pageFromHash(): NavKey {
+  const hash = window.location.hash.replace(/^#\/?/, "")
+  return NAV_KEYS.includes(hash) ? (hash as NavKey) : "downloads"
+}
+
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const current = theme ?? "system"
@@ -52,7 +59,7 @@ function ThemeToggle() {
 
 export default function App() {
   const { resolvedTheme } = useTheme()
-  const [page, setPage] = useState<NavKey>("downloads")
+  const [page, setPage] = useState<NavKey>(() => pageFromHash())
   const [status, setStatus] = useState<Status | null>(null)
   const [statusError, setStatusError] = useState("")
 
@@ -67,9 +74,22 @@ export default function App() {
 
   useEffect(() => {
     loadStatus()
+    const timer = setInterval(loadStatus, 30000)
+    return () => clearInterval(timer)
   }, [])
 
-  const goToJobs = () => setPage("jobs")
+  useEffect(() => {
+    const onHash = () => setPage(pageFromHash())
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+
+  function navigate(key: NavKey) {
+    window.location.hash = `#/${key}`
+    setPage(key)
+  }
+
+  const goToJobs = () => navigate("jobs")
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -85,7 +105,7 @@ export default function App() {
                 key={item.key}
                 variant={page === item.key ? "secondary" : "ghost"}
                 className="justify-start"
-                onClick={() => setPage(item.key)}
+                onClick={() => navigate(item.key)}
               >
                 <item.icon />
                 {item.label}
@@ -101,6 +121,9 @@ export default function App() {
                 <div className="text-muted-foreground">{status.connection}</div>
                 <div className="mt-1 text-muted-foreground">
                   RSS {status.rss} · 解析订阅 {status.kazumi_subscriptions}
+                </div>
+                <div className="mt-1 text-muted-foreground">
+                  {status.interval ? `定时每 ${status.interval} 分钟` : "定时已关闭"}
                 </div>
               </>
             ) : (

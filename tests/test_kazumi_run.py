@@ -89,7 +89,9 @@ def test_search_all_concurrent_and_tolerant(tmp_path, monkeypatch):
 
 def test_subscription_downloads_and_dedups(tmp_path):
     fake = FakeAria2(tmp_path)
-    service = build_service(tmp_path, fake, [KazumiSubscription(name="芙莉莲", rule="Test")])
+    service = build_service(
+        tmp_path, fake, [KazumiSubscription(name="芙莉莲", rule="Test", initial="all")]
+    )
     roads = [
         Road(
             name="线路1",
@@ -116,8 +118,8 @@ def test_subscription_limit_and_names(tmp_path):
         tmp_path,
         fake,
         [
-            KazumiSubscription(name="芙莉莲", rule="Test"),
-            KazumiSubscription(name="别的番", rule="Test"),
+            KazumiSubscription(name="芙莉莲", rule="Test", initial="all"),
+            KazumiSubscription(name="别的番", rule="Test", initial="all"),
         ],
     )
     roads = [
