@@ -41,6 +41,8 @@ type FeedForm = {
   url: string
   names: string
   exclude_names: string
+  name_regex: string
+  exclude_name_regex: string
   initial: "latest" | "all" | "none"
   one_per_episode: boolean
   enabled: boolean
@@ -52,6 +54,8 @@ const emptyForm: FeedForm = {
   url: "",
   names: "",
   exclude_names: "",
+  name_regex: "",
+  exclude_name_regex: "",
   initial: "latest",
   one_per_episode: true,
   enabled: true,
@@ -64,6 +68,18 @@ function distinctNames(items: RssPreview["items"]) {
     if (name && !names.includes(name)) names.push(name)
   }
   return names
+}
+
+function regexLabel(patterns?: string[]) {
+  return (patterns ?? []).map((pattern) => `/${pattern}/`)
+}
+
+function filterLabel(feed: RssFeed) {
+  const include = [...(feed.names ?? []), ...regexLabel(feed.name_regex)]
+  if (include.length) return include.join(" / ")
+  const exclude = [...(feed.exclude_names ?? []), ...regexLabel(feed.exclude_name_regex)]
+  if (exclude.length) return `排除 ${exclude.join(" / ")}`
+  return "全部"
 }
 
 export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => void }) {
@@ -190,6 +206,8 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
       url: form.url.trim(),
       names: splitList(form.names),
       exclude_names: splitList(form.exclude_names),
+      name_regex: splitList(form.name_regex),
+      exclude_name_regex: splitList(form.exclude_name_regex),
       initial: form.initial,
       one_per_episode: form.one_per_episode,
       enabled: form.enabled,
@@ -219,6 +237,8 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
       url: feed.url,
       names: (feed.names ?? []).join(", "),
       exclude_names: (feed.exclude_names ?? []).join(", "),
+      name_regex: (feed.name_regex ?? []).join(", "),
+      exclude_name_regex: (feed.exclude_name_regex ?? []).join(", "),
       initial: feed.initial ?? "latest",
       one_per_episode: feed.one_per_episode ?? true,
       enabled: feed.enabled,
@@ -300,13 +320,7 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
                     <TableCell className="max-w-72 truncate text-muted-foreground" title={feed.url}>
                       {feed.url}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {feed.names?.length
-                        ? feed.names.join(" / ")
-                        : feed.exclude_names?.length
-                          ? `排除 ${feed.exclude_names.join(" / ")}`
-                          : "全部"}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{filterLabel(feed)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {feed.initial ?? "latest"}
                       {feed.one_per_episode ? " · 同集一个" : ""}
@@ -422,6 +436,22 @@ export default function RssPage({ onNavigate }: { onNavigate: (key: "jobs") => v
               <Input
                 value={form.exclude_names}
                 onChange={(event) => setForm({ ...form, exclude_names: event.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">只保留番剧名（正则，逗号分隔，留空为全部）</Label>
+              <Input
+                value={form.name_regex}
+                onChange={(event) => setForm({ ...form, name_regex: event.target.value })}
+                placeholder="(简|繁)体, 喵萌"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">排除番剧名（正则，逗号分隔）</Label>
+              <Input
+                value={form.exclude_name_regex}
+                onChange={(event) => setForm({ ...form, exclude_name_regex: event.target.value })}
+                placeholder="Baha|CR"
               />
             </div>
             <div className="flex flex-col gap-1">

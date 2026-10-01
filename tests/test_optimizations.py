@@ -243,6 +243,40 @@ def test_retry_kazumi_needs_rule_info(tmp_path):
         server._retry_kazumi(config, task)
 
 
+def test_feed_from_body_parses_and_validates_regex():
+    feed = server._feed_from_body(
+        {
+            "url": "http://feed",
+            "names": ["A"],
+            "exclude_names": ["B"],
+            "name_regex": ["^A"],
+            "exclude_name_regex": ["B|C"],
+        }
+    )
+    assert feed.names == ["A"]
+    assert feed.exclude_names == ["B"]
+    assert feed.name_regex == ["^A"]
+    assert feed.exclude_name_regex == ["B|C"]
+    with pytest.raises(Exception):
+        server._feed_from_body({"url": "http://feed", "name_regex": ["("]})
+
+
+def test_parse_kazumi_key_handles_url_source():
+    # 作品地址里含 ":"，不能简单 split(":")
+    assert server._parse_kazumi_key("kazumi:DM84:https://dmbus.cc/v/1484.html:1") == (
+        "DM84",
+        "https://dmbus.cc/v/1484.html",
+        "1",
+    )
+    assert server._parse_kazumi_key("kazumi:AGE:http://a/b?x=1:2:12") == (
+        "AGE",
+        "http://a/b?x=1:2",
+        "12",
+    )
+    assert server._parse_kazumi_key("kazumi:") is None
+    assert server._parse_kazumi_key("magnet:?xt=abc") is None
+
+
 # -- preview does not collide with a running download ----------------------
 def test_preview_kind_is_separate():
     assert server._PREVIEW_KINDS["rss_run"] == "rss_preview"

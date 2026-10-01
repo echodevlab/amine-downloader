@@ -60,7 +60,8 @@ temp_dir = "/tmp"
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
 # title = "葬送的芙莉莲"
-# names = ["葬送的芙莉莲"]           # 只下番剧名匹配这些关键词的条目
+# names = ["葬送的芙莉莲"]           # 只下番剧名包含这些关键词的条目
+# name_regex = ["(简|繁)体"]         # 只下番剧名匹配这些正则的条目
 # one_per_episode = true            # 同一集只保留一个版本
 # initial = "latest"                # 首次运行：latest / all / none
 

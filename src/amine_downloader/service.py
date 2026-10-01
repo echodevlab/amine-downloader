@@ -333,11 +333,30 @@ class DownloadService:
         lowered = (name or "").lower()
         return any(item.lower() in lowered for item in wanted if item)
 
+    @staticmethod
+    def _regex_allowed(name: str, patterns: list[str]) -> bool:
+        for pattern in patterns:
+            if not pattern:
+                continue
+            try:
+                if re.search(pattern, name or "", re.IGNORECASE):
+                    return True
+            except re.error:
+                # 无效正则视为不匹配，避免整轮订阅失败
+                continue
+        return False
+
     def _match_name(self, episode: RssEpisode, feed) -> bool:
         name = (episode.parsed.title if episode.parsed else "") or ""
-        if feed.names and not self._name_allowed(name, feed.names):
+        has_include = bool(feed.names or feed.name_regex)
+        if has_include and not (
+            self._name_allowed(name, feed.names)
+            or self._regex_allowed(name, feed.name_regex)
+        ):
             return False
-        if feed.exclude_names and self._name_allowed(name, feed.exclude_names):
+        if self._name_allowed(name, feed.exclude_names) or self._regex_allowed(
+            name, feed.exclude_name_regex
+        ):
             return False
         return True
 

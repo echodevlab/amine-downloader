@@ -158,6 +158,9 @@ class QBittorrentDownloader(BaseDownloader):
         return self._find_hash(name=name, source=source, save_path=save_path)
 
     def _download_torrent(self, url: str) -> bytes | None:
+        # 只有 .torrent 才需要预取；其它 URL 直接交给 qBittorrent
+        if not url.split("?")[0].lower().endswith(".torrent"):
+            return None
         try:
             response = httpx.get(url, timeout=30.0, follow_redirects=True)
             response.raise_for_status()

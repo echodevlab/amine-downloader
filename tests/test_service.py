@@ -204,6 +204,36 @@ def test_run_excludes_names(tmp_path, monkeypatch):
     assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
 
 
+def test_run_name_regex_include(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path / "r1", [])
+    service.config.rss = [RssFeed(name="F", url="http://feed", name_regex=["^Ani"])]
+    results = service.run()
+    assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
+
+
+def test_run_name_regex_exclude(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path / "r2", [])
+    service.config.rss = [RssFeed(name="F", url="http://feed", exclude_name_regex=["Boc"])]
+    results = service.run()
+    assert [item.episode.title for item in results] == ["[Lilith-Raws] Anime - 01 [1080p]"]
+
+
+def test_run_invalid_regex_is_ignored(tmp_path, monkeypatch):
+    import amine_downloader.service as service_module
+
+    monkeypatch.setattr(service_module, "fetch_feed", lambda url, **kwargs: _fake_episodes())
+    service, _, _ = build_service(tmp_path / "r3", [])
+    service.config.rss = [RssFeed(name="F", url="http://feed", name_regex=["("])]
+    # 无效正则不应抛异常，只是匹配不到任何条目
+    assert service.run() == []
+
+
 def test_run_emits_progress_events(tmp_path, monkeypatch):
     import amine_downloader.service as service_module
 

@@ -33,6 +33,8 @@ export type RssFeed = {
   title?: string
   names?: string[]
   exclude_names?: string[]
+  name_regex?: string[]
+  exclude_name_regex?: string[]
   one_per_episode?: boolean
   initial?: "latest" | "all" | "none"
   season?: number | null

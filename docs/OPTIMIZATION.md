@@ -69,7 +69,7 @@
 
 ### 8. 订阅、别名、偏好只能手改 TOML
 
-- 现状：Web 设置页只覆盖了 `app / aria2 / qbittorrent / library / kazumi` 几个基础字段。`[[rss]]`、`[[kazumi.subscribe]]`、`[titles]`、`resolution_preference`、`names / exclude_names` 都只能编辑配置文件；RSS 页和解析页的说明也只能写「在配置文件里添加 …」。
+- 现状：Web 设置页只覆盖了 `app / aria2 / qbittorrent / library / kazumi` 几个基础字段。`[[rss]]`、`[[kazumi.subscribe]]`、`[titles]`、`resolution_preference`、`names / exclude_names / name_regex / exclude_name_regex` 都只能编辑配置文件；RSS 页和解析页的说明也只能写「在配置文件里添加 …」。
 - 另外 `put_config` 用 `tomli_w` 重写整个文件（[server.py:622](../src/amine_downloader/server.py#L622)），**用户手写的注释会全部丢失**，而且 `.bak` 只保留一份。
 - 建议：
   - RSS 页支持增删改订阅，输入 URL 后先预览解析结果（番剧名、集数），再勾选要保留的番剧名；

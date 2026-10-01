@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import sys
 import tempfile
@@ -190,6 +191,23 @@ async def tasks(request) -> JSONResponse:
     return await _run(work)
 
 
+def _parse_kazumi_key(key: str) -> tuple[str, str, str] | None:
+    """Split ``kazumi:<rule>:<work-source>:<episode>`` safely.
+
+    The work source is usually a URL containing ``:`` (``https://...``), so it
+    must be split from the right instead of with a plain ``split(":")``.
+    """
+
+    if not key.startswith("kazumi:"):
+        return None
+    rest = key[len("kazumi:") :]
+    rule, _, remainder = rest.partition(":")
+    work_source, _, number = remainder.rpartition(":")
+    if not rule or not work_source or not number:
+        return None
+    return rule, work_source, number
+
+
 def _retry_kazumi(config: AppConfig, task, on_event=None) -> dict:
     """Re-resolve a Kazumi episode: re-fetch chapters, re-sniff, download.
 
@@ -197,10 +215,10 @@ def _retry_kazumi(config: AppConfig, task, on_event=None) -> dict:
     one. The task key encodes ``kazumi:<rule>:<work-source>:<episode>``.
     """
 
-    parts = task.key.split(":", 3)
-    if len(parts) < 4 or not parts[1] or not parts[2]:
+    parsed_key = _parse_kazumi_key(task.key)
+    if parsed_key is None:
         raise AmineError("这条记录缺少规则/作品信息，无法重新获取链接，请在解析页重新提交")
-    _, rule_name, work_source, number = parts
+    rule_name, work_source, number = parsed_key
 
     service = KazumiService(config)
     try:
@@ -864,6 +882,10 @@ def _feed_table(feed: RssFeed):
         table["names"] = list(feed.names)
     if feed.exclude_names:
         table["exclude_names"] = list(feed.exclude_names)
+    if feed.name_regex:
+        table["name_regex"] = list(feed.name_regex)
+    if feed.exclude_name_regex:
+        table["exclude_name_regex"] = list(feed.exclude_name_regex)
     table["one_per_episode"] = feed.one_per_episode
     table["initial"] = feed.initial
     if feed.season is not None:
@@ -1007,12 +1029,26 @@ async def config_endpoint(request) -> JSONResponse:
 
 
 # -- subscription management ----------------------------------------------
+def _validate_regex(patterns: list[str], label: str) -> None:
+    for pattern in patterns:
+        if not pattern:
+            continue
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise AmineError(f"{label}正则无效「{pattern}」：{exc}") from exc
+
+
 def _feed_from_body(body: dict) -> RssFeed:
     url = str(body.get("url") or "").strip()
     if not url:
         raise AmineError("订阅 URL 不能为空")
     season = body.get("season")
     offset = body.get("episode_offset")
+    name_regex = [str(item) for item in body.get("name_regex") or []]
+    exclude_name_regex = [str(item) for item in body.get("exclude_name_regex") or []]
+    _validate_regex(name_regex, "只保留番剧名")
+    _validate_regex(exclude_name_regex, "排除番剧名")
     return RssFeed(
         name=str(body.get("name") or url),
         url=url,
@@ -1020,6 +1056,8 @@ def _feed_from_body(body: dict) -> RssFeed:
         title=str(body.get("title") or ""),
         names=[str(item) for item in body.get("names") or []],
         exclude_names=[str(item) for item in body.get("exclude_names") or []],
+        name_regex=name_regex,
+        exclude_name_regex=exclude_name_regex,
         one_per_episode=bool(body.get("one_per_episode", True)),
         initial=str(body.get("initial") or "latest"),
         season=int(season) if season not in (None, "") else None,

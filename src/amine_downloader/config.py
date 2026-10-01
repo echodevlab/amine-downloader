@@ -82,8 +82,10 @@ local_dir = ""
 # url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 # enabled = true
 # title = "葬送的芙莉莲"   # 覆盖解析出的番剧名（可选，用于 Jellyfin 匹配等）
-# names = ["葬送的芙莉莲"]           # 只下番剧名匹配这些关键词的条目（可选，子串匹配）
-# exclude_names = ["某番剧"]         # 排除番剧名匹配这些关键词的条目（可选）
+# names = ["葬送的芙莉莲"]           # 只下番剧名包含这些关键词的条目（可选，子串匹配）
+# exclude_names = ["某番剧"]         # 排除番剧名包含这些关键词的条目（可选）
+# name_regex = ["(简|繁)体"]         # 只下番剧名匹配这些正则的条目（可选，大小写不敏感）
+# exclude_name_regex = ["某正则"]     # 排除番剧名匹配这些正则的条目（可选）
 # one_per_episode = true            # 同一集只保留一个版本（默认 true）
 # initial = "latest"                # 首次运行：latest 只下最新一集 / all 全部 / none 只标记已见
 # season = 2                        # 覆盖季号（可选）
@@ -206,10 +208,14 @@ class RssFeed:
     url: str
     enabled: bool = True
     title: str = ""
-    #: 只保留解析出的番剧名匹配这些关键词的条目（留空 = 全部）；大小写不敏感的子串匹配
+    #: 只保留解析出的番剧名包含这些关键词的条目（留空 = 全部）；大小写不敏感的子串匹配
     names: list[str] = field(default_factory=list)
-    #: 排除解析出的番剧名匹配这些关键词的条目
+    #: 排除解析出的番剧名包含这些关键词的条目
     exclude_names: list[str] = field(default_factory=list)
+    #: 只保留解析出的番剧名匹配这些正则的条目（大小写不敏感，search）
+    name_regex: list[str] = field(default_factory=list)
+    #: 排除解析出的番剧名匹配这些正则的条目
+    exclude_name_regex: list[str] = field(default_factory=list)
     #: 同一集只保留一个版本（按字幕组 → 分辨率 → 发布时间选择）
     one_per_episode: bool = True
     #: 首次运行策略：latest / all / none
@@ -293,6 +299,10 @@ class AppConfig:
                     title=str(entry.get("title", "")),
                     names=[str(item) for item in entry.get("names", []) or []],
                     exclude_names=[str(item) for item in entry.get("exclude_names", []) or []],
+                    name_regex=[str(item) for item in entry.get("name_regex", []) or []],
+                    exclude_name_regex=[
+                        str(item) for item in entry.get("exclude_name_regex", []) or []
+                    ],
                     one_per_episode=bool(entry.get("one_per_episode", True)),
                     initial=_as_initial(entry.get("initial")),
                     season=_optional_int(entry.get("season")),

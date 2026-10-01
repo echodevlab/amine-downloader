@@ -32,4 +32,7 @@ pytest-of-*/
 *.ass
 *.ssa
 *.vtt
-/安达与沧浪/
+*.zip
+*.7z
+*.rar
+/安达与岛村/

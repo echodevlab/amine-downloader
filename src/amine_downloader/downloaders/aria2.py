@@ -137,6 +137,9 @@ class Aria2Downloader(BaseDownloader):
         return entries
 
     def _download_torrent(self, url: str) -> bytes | None:
+        # 只有 .torrent 才需要预取；视频/媒体直链直接交给 aria2，避免白白下载一遍
+        if not url.split("?")[0].lower().endswith(".torrent"):
+            return None
         try:
             response = httpx.get(url, timeout=30.0, follow_redirects=True)
             response.raise_for_status()

@@ -127,10 +127,14 @@ local_dir = ""
 name = "Mikan - 葬送的芙莉莲"
 url = "https://mikanani.me/RSS/Bangumi?bangumiId=xxxx"
 enabled = true
-# 只下番剧名匹配这些关键词的条目（可选，大小写不敏感的子串匹配）
+# 只下番剧名包含这些关键词的条目（可选，大小写不敏感的子串匹配）
 # names = ["葬送的芙莉莲"]
-# 排除番剧名匹配这些关键词的条目（可选）
+# 排除番剧名包含这些关键词的条目（可选）
 # exclude_names = ["某番剧"]
+# 只保留番剧名匹配这些正则的条目（可选，大小写不敏感）
+# name_regex = ["(简|繁)体"]
+# 排除番剧名匹配这些正则的条目（可选）
+# exclude_name_regex = ["某正则"]
 # 同一集只保留一个版本（默认 true，按 分辨率 → 发布时间 选择）
 # one_per_episode = true
 # 首次运行策略：latest / all / none
@@ -149,12 +153,16 @@ enabled = true
 [[rss]]
 name = "Mikan Classic"
 url = "https://mikanani.me/RSS/Classic"
-names = ["葬送的芙莉莲", "孤独摇滚"]   # 白名单：只下这些番剧
-# exclude_names = ["某番剧"]            # 黑名单：排除这些番剧
+names = ["葬送的芙莉莲", "孤独摇滚"]   # 白名单：只下包含这些关键词的番剧
+# exclude_names = ["某番剧"]            # 黑名单：排除包含这些关键词的番剧
+# name_regex = ["(简|繁)体"]           # 白名单：正则匹配番剧名
+# exclude_name_regex = ["Baha|CR"]     # 黑名单：正则匹配番剧名
 ```
 
-- 匹配是**大小写不敏感的子串**：`names = ["芙莉莲"]` 也能匹配 `葬送的芙莉莲`。
-- 同时设置时：先看白名单，再看黑名单。
+- `names` / `exclude_names` 是**大小写不敏感的子串**：`names = ["芙莉莲"]` 也能匹配 `葬送的芙莉莲`。
+- `name_regex` / `exclude_name_regex` 是**大小写不敏感的正则**（Python `re.search` 语义），适合
+  `(简|繁)体`、`喵萌|桜都` 这类写法；写错的正则保存时会被拒绝。
+- 白名单里 `names` 与 `name_regex` 是「或」的关系：命中任意一个就保留；黑名单命中任意一个就排除。
 - 用 `amine-downloader rss "<订阅源名称或URL>"` 可以先看看解析出的番剧名；`run --dry-run` 也能确认过滤效果。
 
 ### 获取订阅源地址
